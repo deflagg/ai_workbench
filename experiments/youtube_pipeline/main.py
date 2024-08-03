@@ -51,11 +51,7 @@ def main():
                 if 'project_path' in state:
                     print(f"Project Path: {state['project_path']}")
                 
-                
-                # for message in state["messages"]:
-                #     print(f"{message.name}: {message.content}")
-                # print("----")
-            
+
             print("YouTube video creation process completed!")
         except Exception as e:
             print(f"Error processing user input: {e}")
