@@ -14,153 +14,156 @@ from experiments.helpers.debugging_helpers import display_langgraph_graph
 from experiments.helpers.tools.audio_tools import tts_whisper
 from experiments.helpers.tools.davinci_tools import create_resolve_project, add_audio_track
 
-# Define the object that is passed between each node in the graph
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
     sender: str
+    script_path: str
+    voiceover_path: str
+    project_path: str
 
-def create_prompt(system_message: str, tools: list = None) -> ChatPromptTemplate:
-    """Create a prompt template for the agent."""
-    messages = [
-        (
-            "system",
+def create_agent(llm, system_message: str, tools):
+    """Create an agent."""
+    prompt = ChatPromptTemplate.from_messages(
+        [
             (
+                "system",
                 "You are a helpful AI assistant, collaborating with other assistants."
-                " Execute tasks to the best of your ability using the tools provided when necessary."
-                " If you have completed all required tasks, prefix your response with FINAL ANSWER."
-                f"\n{system_message}"
+                " Use the provided tools to progress towards answering the question."
+                " If you are unable to fully answer, that's OK, another assistant with different tools "
+                " will help where you left off. Execute what you can to make progress."
+                " If you or any of the other assistants have the final answer or deliverable,"
+                " prefix your response with FINAL ANSWER so the team knows to stop."
+                " You have access to the following tools: {tool_names}.\n{system_message}",
             ),
-        ),
-        MessagesPlaceholder(variable_name="messages"),
-    ]
+            MessagesPlaceholder(variable_name="messages"),
+        ]
+    )
+    prompt = prompt.partial(system_message=system_message)
+    prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
     
-    if tools:
-        messages[0] = (
-            "system",
-            messages[0][1] + f" You have access to the following tools: {', '.join([tool.name for tool in tools])}."
-        )
-    
-    return ChatPromptTemplate.from_messages(messages)
-
-def create_agent(llm, system_message: str, tools: list = None):
-    """Create an agent with the provided system message and optional tools."""
-    prompt = create_prompt(system_message, tools)
     if tools:
         return prompt | llm.bind_tools(tools)
     return prompt | llm
 
-def handle_agent_exception(agent_name: str, e: Exception) -> dict:
-    """Handle exceptions for agent nodes."""
-    print(f"Error in agent_node for {agent_name}: {e}")
-    return {"messages": [], "sender": agent_name}
-
-def agent_node(state, agent, name) -> dict:
-    """Create a node for a given agent."""
-    try:
-        result = agent.invoke(state)
-        result = AIMessage(**result.dict(exclude={"type", "name"}), name=name)
-        return {"messages": [result], "sender": name}
-    except Exception as e:
-        return handle_agent_exception(name, e)
 
 # Initialize the LLM model
-llm = ChatOpenAI(model="gpt-4o-mini")
+llm = ChatOpenAI(model="gpt-4")
 
 # Define the tools
 tools = [tts_whisper, create_resolve_project, add_audio_track]
 tool_node = ToolNode(tools)
 
-# Define agents
-writer_agent = create_agent(
-    llm,
-    system_message="You are an expert YouTube content creator. Create engaging and informative video scripts."
-)
 
-voiceover_agent = create_agent(
-    llm,
-    system_message="You are an AI assistant specialized in video production. Your responsibilities include creating voiceovers, setting up DaVinci Resolve projects, and managing audio within these projects. Use the appropriate tools to complete tasks related to these areas without needing explicit instructions for each step.",
-    tools=tools
-)
+def handle_agent_exception(agent_name: str, e: Exception) -> dict:
+    print(f"Error in agent_node for {agent_name}: {e}")
+    return {"messages": [], "sender": agent_name}
+
+def agent_node(state: AgentState, agent, name) -> AgentState:
+    """Create a node for a given agent."""
+    try:
+        result = agent.invoke(state)
+        result = AIMessage(**result.dict(exclude={"type", "name"}), name=name)
+        content = result.content
+        return {
+            "messages": [result],
+            "sender": name,
+            "script_path": "",
+            "voiceover_path": "",
+            "project_path": "",
+        }
+    except Exception as e:
+        return handle_agent_exception(name, e)
 
 # Define agent nodes
-writer_node = functools.partial(agent_node, agent=writer_agent, name="youtube_content_creator")
+writer_node = functools.partial(
+    agent_node,
+    agent = create_agent(
+        llm,
+        system_message="You are an expert YouTube content creator. Create engaging and informative video scripts based on the given topic. Output only the script text, no additional explanations.",
+        tools=[]
+    ),
+    name = "writer_node"
+)
 
-def voiceover_node(state: AgentState) -> AgentState:
+voiceover_node = functools.partial(
+    agent_node,
+    agent = create_agent(
+        llm,
+        system_message="You are an AI assistant specialized in creating voiceovers. Use the tts_whisper tool to generate a voiceover for the given script. Return the path to the generated audio file.",
+        tools=[tts_whisper]
+    ),
+    name = "voiceover_node"
+)
+
+project_setup_node = functools.partial(
+    agent_node,
+    agent = create_agent(
+        llm,
+        system_message="You are an AI assistant specialized in setting up DaVinci Resolve projects. Use the create_resolve_project tool to create a new project for the YouTube video. Return the path to the created project.",
+        tools=[create_resolve_project]
+    ),
+    name = "project_setup_node"
+)
+
+audio_node = functools.partial(
+    agent_node,
+    agent = create_agent(
+        llm,
+        system_message="You are an AI assistant specialized in managing audio within DaVinci Resolve projects. Use the add_audio_track tool to add the voiceover audio to the project timeline. Confirm when the task is completed.",
+        tools=[add_audio_track]
+    ),
+    name = "audio_node"
+)
+
+
+# Define the edge logic
+def router(state) -> Literal["call_tool", "__end__", "continue"]:
+    """Router function to determine next steps."""
     try:
-        # Process the input state
-        result = voiceover_agent.invoke(state)
-        result_message = AIMessage(**result.dict(exclude={"type", "name"}), name="youtube_voiceover_creator")
+        messages = state["messages"]
+        last_message = messages[-1]
+        if last_message.tool_calls:
+            return "call_tool"
+        if "FINAL ANSWER" in last_message.content:
+            return "__end__"
+        return "continue"
+    except KeyError as e:
+        print(f"Error in router function: {e}")
+        return "continue"
         
-        # Check for tool calls
-        if result_message.tool_calls:
-            for tool_call in result_message.tool_calls:
-                tool_result = tool_node.invoke({
-                    "messages": state["messages"] + [result_message],
-                    "sender": "youtube_voiceover_creator"
-                })
-                result_message.content += f"\n\nTool result: {tool_result['messages'][-1].content}"
-        
-        return {"messages": [result_message], "sender": "youtube_voiceover_creator"}
-    except Exception as e:
-        return handle_agent_exception("youtube_voiceover_creator", e)
-
 def create_graph() -> StateGraph:
-    """Create and return the state graph."""
-    
-    # Define the graph nodes and entry point node
     workflow = StateGraph(AgentState)
     workflow.add_node("writer_node", writer_node)
     workflow.add_node("voiceover_node", voiceover_node)
+    workflow.add_node("project_setup_node", project_setup_node)
+    workflow.add_node("audio_node", audio_node)
     workflow.add_node("call_tool", tool_node)
     workflow.set_entry_point("writer_node")
 
-    # Define graph edges
-    def router(state) -> Literal["call_tool", "__end__", "continue"]:
-        """Router function to determine next steps."""
-        try:
-            messages = state["messages"]
-            last_message = messages[-1]
-            if last_message.tool_calls:
-                return "call_tool"
-            if "FINAL ANSWER" in last_message.content:
-                return "__end__"
-            return "continue"
-        except KeyError as e:
-            print(f"Error in router function: {e}")
-            return "continue"
-        
     workflow.add_conditional_edges(
         "writer_node",
         router,
         {"call_tool": "call_tool", "continue": "voiceover_node", "__end__": END},
     )
-
-    def voiceover_router(state: AgentState) -> Literal["call_tool", "continue", "__end__"]:
-        try:
-            messages = state["messages"]
-            last_message = messages[-1]
-            all_messages_content = ' '.join([msg.content for msg in messages])
-            
-            if last_message.tool_calls:
-                return "call_tool"
-            
-            tools_used = [tool.name in all_messages_content for tool in tools]
-            
-            if all(tools_used) and "FINAL ANSWER" in last_message.content:
-                return "__end__"
-            
-            return "continue"
-        except KeyError as e:
-            print(f"Error in voiceover_router function: {e}")
-            return "__end__"
-        
+    
     workflow.add_conditional_edges(
         "voiceover_node",
-        voiceover_router,
-        {"call_tool": "call_tool", "continue": "voiceover_node", "__end__": END},
+        router,
+        {"call_tool": "call_tool", "continue": "project_setup_node", "__end__": END},
     )
+    
+    workflow.add_conditional_edges(
+        "project_setup_node",
+        router,
+        {"call_tool": "call_tool", "continue": "audio_node", "__end__": END},
+    )
+    
+    
+    workflow.add_conditional_edges(
+        "audio_node",
+        router,
+        {"call_tool": "call_tool", "continue": END, "__end__": END},
+    )
+    
 
-    # Compile and return the graph
-    graph = workflow.compile()
-    return graph
-
+    return workflow.compile()

@@ -22,4 +22,7 @@ def tts_whisper(text: str) -> str:
         voice = "alloy",
         input = text
     )
-    return response.write_to_file("./output.mp3")
+    
+    response.write_to_file("./output.mp3")
+    
+    return "./output.mp3"
