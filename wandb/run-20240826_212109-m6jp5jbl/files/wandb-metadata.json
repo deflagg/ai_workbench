@@ -1,0 +1,53 @@
+{
+    "os": "Windows-10-10.0.22631-SP0",
+    "python": "3.11.3",
+    "heartbeatAt": "2024-08-27T01:21:10.342367",
+    "startedAt": "2024-08-27T01:21:09.858756",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "d:\\source\\vscode\\ai_workbench\\experiments\\agent_conversations\\main.py",
+    "codePathLocal": "experiments\\agent_conversations\\main.py",
+    "codePath": "experiments\\agent_conversations\\main.py",
+    "git": {
+        "remote": "https://github.com/deflagg/ai_workbench.git",
+        "commit": "08211684c31cdc939907d95aff0bb6efe18536cd"
+    },
+    "email": "deflagg@hotmail.com",
+    "root": "D:/source/vscode/ai_workbench",
+    "host": "Crunchy",
+    "username": "defla",
+    "executable": "D:\\source\\vscode\\ai_workbench\\.venv\\Scripts\\python.exe",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2904.0,
+        "min": 0.0,
+        "max": 2904.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2904.0,
+            "min": 0.0,
+            "max": 2904.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 931.3867149353027,
+            "used": 226.93587112426758
+        }
+    },
+    "gpu": "NVIDIA GeForce GTX 1080",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GTX 1080",
+            "memory_total": 8589934592
+        }
+    ],
+    "memory": {
+        "total": 15.861900329589844
+    }
+}

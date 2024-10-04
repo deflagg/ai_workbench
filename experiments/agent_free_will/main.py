@@ -1,4 +1,5 @@
 import sys
+import json
 sys.path.append('d:/source/vscode/ai_workbench')
 
 from agent_graph import create_graph, AgentState
@@ -22,40 +23,31 @@ def main():
     
     # Main loop to interact with the user
     while True:
-        user_input = input("Enter a YouTube video topic (or 'quit' to exit): ")
+        user_input = input("Prompt (or 'quit' to exit): ")
         if user_input.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
             break
         
         try:
             initial_state: AgentState = {
-                "messages": [HumanMessage(content=f"Create a YouTube video about {user_input}")],
-                "sender": "human",
-                "script": "",
-                "voiceover_path": "",
-                "project_path": ""
+                "messages": [HumanMessage(content=user_input)],
+                "next": str,
+                "sender": str,
             }
             
             for step in graph.stream(initial_state):
                 node_name = list(step.keys())[0]
                 state = step[node_name]
-                
-                # print(f"----\nCompleted step: {node_name}")
-                
-                # if 'sender' in state:
-                #     print(f"Sender: {state['sender']}")
 
-                # print(f"Latest message: {state['messages'][-1].content}")
-                state["messages"][-1].pretty_print()
-                # if 'script' in state:
-                #     print(f"Script: {state['script']}")
-                # if 'voiceover_path' in state:
-                #     print(f"Voiceover Path: {state['voiceover_path']}")
-                # if 'project_path' in state:
-                #     print(f"Project Path: {state['project_path']}")
-                
+                last_message = state["messages"][-1]
+                # json_data = json.loads(last_message.content)
+                # pretty_json = json.dumps(json_data, indent=4)
+                # print(f"Node: {node_name}")
+                # print(f"Message: {pretty_json}")
 
-            print("YouTube video creation process completed!")
+                last_message.pretty_print()
+
+            print("Completed!")
         except Exception as e:
             print(f"Error processing user input: {e}")
 

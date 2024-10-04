@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz  
 
 @tool
-def get_current_datetime(timezone_str="America/New_York"):
+def get_current_datetime(timezone_str: str) -> datetime:
     """
     Retrieves the current date and time in the specified timezone.
 

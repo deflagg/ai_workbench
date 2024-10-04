@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
+# from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # Import utility functions
 from experiments.helpers.debugging_helpers import display_langgraph_graph
@@ -132,38 +133,41 @@ def router(state) -> Literal["call_tool", "__end__", "continue"]:
         return "continue"
         
 def create_graph() -> StateGraph:
-    workflow = StateGraph(AgentState)
-    workflow.add_node("writer_node", writer_node)
-    workflow.add_node("voiceover_node", voiceover_node)
-    workflow.add_node("project_setup_node", project_setup_node)
-    workflow.add_node("audio_node", audio_node)
-    workflow.add_node("call_tool", tool_node)
-    workflow.set_entry_point("writer_node")
+    graph = StateGraph(AgentState)
+    graph.add_node("writer_node", writer_node)
+    graph.add_node("voiceover_node", voiceover_node)
+    graph.add_node("project_setup_node", project_setup_node)
+    graph.add_node("audio_node", audio_node)
+    graph.add_node("call_tool", tool_node)
+    graph.set_entry_point("writer_node")
 
-    workflow.add_conditional_edges(
+    graph.add_conditional_edges(
         "writer_node",
         router,
         {"call_tool": "call_tool", "continue": "voiceover_node", "__end__": END},
     )
     
-    workflow.add_conditional_edges(
+    graph.add_conditional_edges(
         "voiceover_node",
         router,
         {"call_tool": "call_tool", "continue": "project_setup_node", "__end__": END},
     )
     
-    workflow.add_conditional_edges(
+    graph.add_conditional_edges(
         "project_setup_node",
         router,
         {"call_tool": "call_tool", "continue": "audio_node", "__end__": END},
     )
     
     
-    workflow.add_conditional_edges(
+    graph.add_conditional_edges(
         "audio_node",
         router,
         {"call_tool": "call_tool", "continue": END, "__end__": END},
     )
     
+    # memory = AsyncSqliteSaver.from_conn_string(":memory:")
+    # graph = builder.compile(checkpointer=memory)
+    
 
-    return workflow.compile()
+    return graph.compile()

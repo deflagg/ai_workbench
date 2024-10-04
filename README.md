@@ -1,5 +1,7 @@
 This repo is only for learning. You will see unnecessary calls to llms and logical designs that don't make sense.
 
+Save imports
+pip freeze > requirements.txt
 
 Create a .env file in the root of the folder to setup environment variables
 
