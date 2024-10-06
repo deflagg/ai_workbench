@@ -23,24 +23,25 @@ def main():
     
 
     try:
-        user_input = input("Prompt (or 'quit' to exit): ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-    
-        initial_state: AgentState = {
-            "messages": [HumanMessage(content=user_input)],
-            "next": "analyst",
-            "sender": "user",
-        }
-        config = {"configurable": {"thread_id": "2"}}
-        for step in graph.stream(initial_state, config):
-            node_name = list(step.keys())[0]
-            state = step[node_name]
+        while True:
+            user_input = input("Prompt (or 'quit' to exit): ")
+            if user_input.lower() in ["quit", "exit", "q"]:
+                print("Goodbye!")
+                break
+        
+            initial_state: AgentState = {
+                "messages": [HumanMessage(content=user_input)],
+                "next": "analyst",
+                "sender": "user",
+            }
+            config = {"configurable": {"thread_id": "2"}}
+            for step in graph.stream(initial_state, config):
+                node_name = list(step.keys())[0]
+                state = step[node_name]
 
-            last_message = state["messages"][-1]
-            last_message.pretty_print()
+                last_message = state["messages"][-1]
+                last_message.pretty_print()
 
-        print("Completed!")
     except Exception as e:
         print(f"Error processing user input: {e}")
 
