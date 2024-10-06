@@ -3,10 +3,8 @@ import json
 import operator
 import functools
 from typing_extensions import TypedDict, Annotated, List, Literal, Union, Optional, Dict, Any
-import prompts as prompts
-
-from pydantic import BaseModel, Field
-#from langchain_core.pydantic_v1 import BaseModel, Field
+#from pydantic import BaseModel, Field
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.utils.function_calling import (
@@ -15,7 +13,6 @@ from langchain_core.utils.function_calling import (
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode
-from langgraph.checkpoint.memory import MemorySaver
 #from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 # from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -27,8 +24,8 @@ from experiments.helpers.tools.code_automation import python_repl
 from experiments.helpers.tools.generic_tools import get_current_datetime
 
 stop_word = "FINISH"
-# members = ["architect", "alice", "mark", "susan"]
-members = ["analyst"]
+# members = ["john", "alice", "mark", "susan"]
+members = ["planner"]
 options = [stop_word] + members
 
 class BasicResponse(BaseModel):
@@ -41,10 +38,9 @@ class Task(BaseModel):
     description: Optional[str] = Field(default=None, description="Description of the task to be completed.")
     role: Optional[str] = Field(default=None, description="Agent responsible for this task.")
     
-
+    
 class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], operator.add]
-    #messages: Annotated[List[BaseMessage], operator.add]
+    messages: Annotated[Union[BaseMessage], operator.add]
     next: str
     sender: str
 
@@ -73,9 +69,9 @@ def create_agent(llm, system_message: str, tools):
     prompt = prompt.partial(tool_prompt=tools_prompt)
     
     if tools:
-        return prompt | llm.bind_tools(tools, strict=True, response_format=BasicResponse)
+        return prompt | llm.bind_tools(tools, strict=True)
     
-    return prompt | llm.with_structured_output(BasicResponse)
+    return prompt | llm
 
 def create_collab_agent(llm, system_message: str, tools, members):
     """Create an agent."""
@@ -93,8 +89,8 @@ def create_collab_agent(llm, system_message: str, tools, members):
                 "system",
                 "If you are unable to complete the objective, another agent with different resources can help you. "
                 "If further action is required to achieve the objective, set the next agent to the appropriate agent: {members} "
-                "If you are not the analyst and no further action is needed to achieve the objective, set the next agent to analyst. "
-                "If you are the analyst and no further action is needed to achieve the objective, deliver the deliverables to the end user and set the next agent to {stop_word}. "
+                "If you are not the planner and no further action is needed to achieve the objective, set the next agent to planner. "
+                "If you are the planner and no further action is needed to achieve the objective, deliver the deliverables to the end user and set the next agent to {stop_word}. "
                 ,
             )
         ]
@@ -118,18 +114,14 @@ def create_collab_agent(llm, system_message: str, tools, members):
     
     return prompt | llm
    
-# class GenericResponse(BaseModel):
-#     """Generic Reponse."""
-#     responseadf23423: str = Field(description="Response")
-#     custom_field: str = Field(description="Custom field")
- 
+
 # Initialize the LLM model
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-# llm = ChatOpenAI(model="gpt-4o", temperature=0, )
-# llm = llm.bind_tools([get_current_datetime], strict=True, response_format=GenericResponse)
+# llm = ChatOpenAI(model="gpt-4o", temperature=0)
+# llm = llm.bind_tools([AIAgentMessage1], strict=True)
+# llm = llm.with_structured_output(AIAgentMessage, method="json_schema", strict=False)
 # test = llm.invoke("what is the color of an a white rabbit?")
 # test = llm.invoke("what time is it? You have access to the following tools: get_current_datetime.")
-
 
 # Define the tools
 tools = [BasicResponse, get_current_datetime]
@@ -138,73 +130,74 @@ tool_node = ToolNode(tools)
 def agent_node(state: AgentState, agent, name) -> AgentState:
     """Create a node for a given agent."""
     try:
-        # Include all previous messages in the agent's context
-        result = agent.invoke(state)
 
-        # if (isinstance(result, AIMessage) and 
-        #     len(result.tool_calls) > 0 and 
-        #     result.tool_calls[0]["name"] in ["BasicResponse"]):
-            
-        #     structured_response = result.tool_calls[0]["args"]
-        #     structured_response["agent_name"] = name
+
+        result = agent.invoke(state)    
         
-        #     return {
-        #         "messages": [AIMessage(content=str(structured_response), agent_name=name)],
-        #         "next": structured_response.get("next_agent", None),
-        #         "sender": name,
-        #     }
-        if isinstance(result, AIMessage):
+        structured_response = result.tool_calls[0]["args"]
+        structured_response["agent_name"] = name
+        
+        if  (isinstance(result, AIMessage) and 
+            len(result.tool_calls) > 0 and 
+            result.tool_calls[0]["name"] in ["BasicResponse"]):
             return {
-                "messages": [AIMessage(**result.dict(exclude={"type", "name"}), agent_name=name)],
-                "next": getattr(result, 'next', None),
-                "sender": name,
-            }
+                        "messages": [AIMessage(content=str(structured_response), agent_name=name)],
+                        "next": structured_response.get("next_agent", None),
+                        "sender": name,
+                    }
+        elif isinstance(result, AIMessage):
+            return {
+                        "messages": [AIMessage(**result.dict(exclude={"type", "name"}), agent_name=name)],
+                        "next": getattr(result, 'next', None),
+                        "sender": name,
+                    }
         else:
             raise ValueError(f"Unexpected result type: {type(result)}")
-
+        
+            
     except Exception as e:
+        # On error, add error to list of messages, and set the next agent to the same one to retry
         return {
-            "messages": [AIMessage(content=f"Error in agent_node method (agent name: {name}): {e}", agent_name=name)],
+            "messages": [AIMessage(content=f"Error occurred: {e}", agent_name=name)],
             "next": name,
             "sender": name,
         }
 
+
+
 # Define agent nodes
-analyst_node = functools.partial(
-    agent_node,
-    agent = create_agent(
-        llm,
-        system_message=prompts.analyst_prompt,
-        tools=[get_current_datetime],
-    ),
-    name = "analyst_node"
-)
-
-
-architect_node = functools.partial(
+planner_node = functools.partial(
     agent_node,
     agent = create_collab_agent(
         llm,
-        system_message=prompts.architect_prompt,
-        tools=[BasicResponse, get_current_datetime],
-        members=[member for member in members if member != "architect"]
+        system_message="""You are the planner. 
+        You are responsible for planning and coordinating the project. 
+        Here's an example:
+
+        Example Plan:
+
+        If you follow these instructions, do you return to the starting point? Always face forward. Take 1 step backward. Take 9 steps left. Take 2 steps backward. Take 6 steps forward. Take 4 steps forward. Take 4 steps backward. Take 3 steps right.
+
+        Example reasoning structure / format should be a list of tasks and the agent members responsible for each task.
+        
+        You will assign tasks to other agents and ensure the project is completed on time.""",
+        tools=[BasicResponse], 
+        members=[member for member in members if member != "planner"]
     ),
-    name = "architect_node"
+    name = "planner_node"
 )
 
-# def human_node(state: AgentState):
-#     try:
-#         user_input = input("Prompt (or 'quit' to exit): ")
-#         if user_input.lower() in ["quit", "exit", "q"]:
-#             print("Goodbye!")
 
-#         return {
-#                 "messages": [HumanMessage(content=user_input)],
-#                 "next": structured_response.get("next_agent", None),
-#                 "sender": name,
-#             }
-#     except:
-#         user_input = "go to step 3!"
+john_node = functools.partial(
+    agent_node,3
+    agent = create_collab_agent(
+        llm,
+        system_message="You are John. You can't help with planning.",
+        tools=[BasicResponse, get_current_datetime],
+        members=[member for member in members if member != "john"]
+    ),
+    name = "john_node"
+)
 
 alice_node = functools.partial(
     agent_node,
@@ -241,7 +234,7 @@ susan_node = functools.partial(
 
 
 # Define the edge logic
-def router(state) -> Literal["__end__", "tool_node"]:
+def router(state) -> Literal["__end__", "planner_node", "john_node", "alice_node", "mark_node", "susan_node", "tool_node"]:
     """Router function to determine next steps."""
     try:
         messages = state["messages"]
@@ -251,8 +244,16 @@ def router(state) -> Literal["__end__", "tool_node"]:
             return "tool_node"
         if state["next"] == stop_word:
             return "__end__"
-        if state["next"] == "analyst":
-             return "analyst_node"
+        if state["next"] == "john":
+            return "john_node"
+        if state["next"] == "alice":
+             return "alice_node"
+        if state["next"] == "mark":
+             return "mark_node"
+        if state["next"] == "susan":
+             return "susan_node"
+        if state["next"] == "planner":
+             return "planner_node"
         return "__end__"
     
     except KeyError as e:
@@ -262,19 +263,39 @@ def router(state) -> Literal["__end__", "tool_node"]:
         
 def create_graph() -> StateGraph:
     graph = StateGraph(AgentState)
+
+     # Add nodes to the graph
+    for member in members:
+        node_name = member + "_node"
+        if node_name in globals():
+            graph.add_node(node_name, globals()[node_name])
+        else:
+            raise ValueError(f"{node_name} not found in globals")
     
-    graph.add_node("analyst_node", analyst_node)
-    # graph.add_node("human_node", human_node)
     graph.add_node("tool_node", tool_node)
     
-    graph.add_edge(START, "analyst_node")
-    graph.add_conditional_edges(
-        "analyst_node",
-        router,
-    )
-    graph.add_edge("tool_node", "analyst_node")
-   
+    # Add conditional edges
+    for member in members:
+        member_node = member + "_node"
+        
+        # Create conditional map
+        # conditional_map = {k + "_node": k + "_node" for k in members if k != member}
+        conditional_map = {k + "_node": k + "_node" for k in members}
+        conditional_map["__end__"] = END
+        conditional_map["tool_node"] = "tool_node"
+
+        
+        if member_node in globals():
+            graph.add_conditional_edges(member_node, router, conditional_map)
+        else:
+            raise ValueError(f"{member_node} not found in globals")
     
+    conditional_map = {k + "_node": k + "_node" for k in members}   
+    graph.add_conditional_edges("tool_node", lambda x: x["sender"], conditional_map)
+    
+    
+    # start with first member in the list
+    graph.add_edge(START, members[0] + "_node")
     
     
     #graph.set_entry_point("supervisor_node")
@@ -283,8 +304,5 @@ def create_graph() -> StateGraph:
     # memory = AsyncSqliteSaver.from_conn_string(":memory:")
     # graph = graph.compile(checkpointer=memory)
     
-    memory = MemorySaver()
-    return graph.compile(checkpointer=memory)
-    # return graph.compile(checkpointer=memory, interrupt_before=["human_feedback"])
-    
-    # return graph.compile()
+
+    return graph.compile()

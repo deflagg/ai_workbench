@@ -21,35 +21,28 @@ def main():
         except Exception as e:
             print(f"Error displaying graph: {e}")
     
-    # Main loop to interact with the user
-    while True:
+
+    try:
         user_input = input("Prompt (or 'quit' to exit): ")
         if user_input.lower() in ["quit", "exit", "q"]:
             print("Goodbye!")
-            break
-        
-        try:
-            initial_state: AgentState = {
-                "messages": [HumanMessage(content=user_input)],
-                "next": str,
-                "sender": str,
-            }
-            
-            for step in graph.stream(initial_state):
-                node_name = list(step.keys())[0]
-                state = step[node_name]
+    
+        initial_state: AgentState = {
+            "messages": [HumanMessage(content=user_input)],
+            "next": "analyst",
+            "sender": "user",
+        }
+        config = {"configurable": {"thread_id": "2"}}
+        for step in graph.stream(initial_state, config):
+            node_name = list(step.keys())[0]
+            state = step[node_name]
 
-                last_message = state["messages"][-1]
-                # json_data = json.loads(last_message.content)
-                # pretty_json = json.dumps(json_data, indent=4)
-                # print(f"Node: {node_name}")
-                # print(f"Message: {pretty_json}")
+            last_message = state["messages"][-1]
+            last_message.pretty_print()
 
-                last_message.pretty_print()
-
-            print("Completed!")
-        except Exception as e:
-            print(f"Error processing user input: {e}")
+        print("Completed!")
+    except Exception as e:
+        print(f"Error processing user input: {e}")
 
 if __name__ == "__main__":
     main()
