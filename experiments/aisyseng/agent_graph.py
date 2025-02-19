@@ -13,6 +13,7 @@ from langchain_core.utils.function_calling import (
     convert_to_openai_function,
 )
 from langchain_openai import ChatOpenAI
+
 from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
@@ -20,15 +21,15 @@ from langgraph.checkpoint.memory import MemorySaver
 # from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # Import utility functions
-from experiments.helpers.debugging_helpers import display_langgraph_graph
-from experiments.helpers.tools.audio_tools import tts_whisper
-from experiments.helpers.tools.code_automation import python_repl
+# from experiments.helpers.debugging_helpers import display_langgraph_graph
+# from experiments.helpers.tools.audio_tools import tts_whisper
+# from experiments.helpers.tools.code_automation import python_repl
 # from experiments.helpers.tools.davinci_tools import create_resolve_project, add_audio_track
-from experiments.helpers.tools.generic_tools import get_current_datetime
+from experiments.helpers.tools.generic_tools import get_current_datetime, do_nothing
 
 stop_word = "FINISH"
 # members = ["architect", "alice", "mark", "susan"]
-members = ["analyst"]
+members = ["analyst", "architect"]
 options = [stop_word] + members
 
 class BasicResponse(BaseModel):
@@ -75,7 +76,7 @@ def create_agent(llm, system_message: str, tools):
     if tools:
         return prompt | llm.bind_tools(tools, strict=True, response_format=BasicResponse)
     
-    return prompt | llm.with_structured_output(BasicResponse)
+    return prompt | llm.bind_tools([do_nothing], strict=True, response_format=BasicResponse)
 
 def create_collab_agent(llm, system_message: str, tools, members):
     """Create an agent."""
@@ -118,15 +119,16 @@ def create_collab_agent(llm, system_message: str, tools, members):
     
     return prompt | llm
    
-# class GenericResponse(BaseModel):
-#     """Generic Reponse."""
-#     responseadf23423: str = Field(description="Response")
-#     custom_field: str = Field(description="Custom field")
+class GenericResponse(BaseModel):
+    """Generic Reponse."""
+    responseadf23423: str = Field(description="Response")
+    custom_field: str = Field(description="Custom field")
  
 # Initialize the LLM model
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 # llm = ChatOpenAI(model="gpt-4o", temperature=0, )
 # llm = llm.bind_tools([get_current_datetime], strict=True, response_format=GenericResponse)
+# llm = llm.with_structured_output(GenericResponse, strict=True, method="json_schema")
 # test = llm.invoke("what is the color of an a white rabbit?")
 # test = llm.invoke("what time is it? You have access to the following tools: get_current_datetime.")
 
@@ -153,10 +155,14 @@ def agent_node(state: AgentState, agent, name) -> AgentState:
         #         "next": structured_response.get("next_agent", None),
         #         "sender": name,
         #     }
-        if isinstance(result, AIMessage):
+        if isinstance(result, ToolMessage):
+            pass
+        elif isinstance(result, AIMessage):
+            structured_response = result.additional_kwargs.get("parsed")
+            
             return {
-                "messages": [AIMessage(**result.dict(exclude={"type", "name"}), agent_name=name)],
-                "next": getattr(result, 'next', None),
+                "messages": [AIMessage(**result.model_dump(exclude={"type", "name"}), agent_name=name)],
+                "next": structured_response.next_agent,
                 "sender": name,
             }
         else:
@@ -165,7 +171,7 @@ def agent_node(state: AgentState, agent, name) -> AgentState:
     except Exception as e:
         return {
             "messages": [AIMessage(content=f"Error in agent_node method (agent name: {name}): {e}", agent_name=name)],
-            "next": name,
+            "next_agent": name,
             "sender": name,
         }
 
@@ -174,8 +180,9 @@ analyst_node = functools.partial(
     agent_node,
     agent = create_agent(
         llm,
-        system_message=prompts.analyst_prompt,
-        tools=[get_current_datetime],
+        #system_message=prompts.analyst_prompt,
+        system_message="You are an analyst. You are part of a team of agents: [user, architect].",
+        tools=[],
     ),
     name = "analyst_node"
 )
@@ -183,11 +190,11 @@ analyst_node = functools.partial(
 
 architect_node = functools.partial(
     agent_node,
-    agent = create_collab_agent(
+    agent = create_agent(
         llm,
-        system_message=prompts.architect_prompt,
-        tools=[BasicResponse, get_current_datetime],
-        members=[member for member in members if member != "architect"]
+        # system_message=prompts.architect_prompt,
+        system_message="You are an architect. You are part of a team of agents: [analyst].",
+        tools=[get_current_datetime],
     ),
     name = "architect_node"
 )
@@ -239,9 +246,8 @@ susan_node = functools.partial(
     name = "susan_node"
 )
 
-
 # Define the edge logic
-def router(state) -> Literal["__end__", "tool_node"]:
+def router(state):
     """Router function to determine next steps."""
     try:
         messages = state["messages"]
@@ -251,8 +257,8 @@ def router(state) -> Literal["__end__", "tool_node"]:
             return "tool_node"
         if state["next"] == stop_word:
             return "__end__"
-        if state["next"] == "analyst":
-             return "analyst_node"
+        if state["next"] in members:
+             return state["next"] + "_node"
         return "__end__"
     
     except KeyError as e:
@@ -263,28 +269,51 @@ def router(state) -> Literal["__end__", "tool_node"]:
 def create_graph() -> StateGraph:
     graph = StateGraph(AgentState)
     
-    graph.add_node("analyst_node", analyst_node)
-    # graph.add_node("human_node", human_node)
-    graph.add_node("tool_node", tool_node)
+    # graph.add_node("analyst_node", analyst_node)
+    # # graph.add_node("human_node", human_node)
+    # graph.add_node("tool_node", tool_node)
     
-    graph.add_edge(START, "analyst_node")
-    graph.add_conditional_edges(
-        "analyst_node",
-        router,
-    )
-    graph.add_edge("tool_node", "analyst_node")
+    # graph.add_edge(START, "analyst_node")
+    # graph.add_conditional_edges(
+    #     "analyst_node",
+    #     router,
+    # )
+    # graph.add_edge("tool_node", "analyst_node")
    
     
+    for member in members:
+        node_name = member + "_node"
+        if node_name in globals():
+            graph.add_node(node_name, globals()[node_name])
+        else:
+            raise ValueError(f"{node_name} not found in globals")
+    
+    graph.add_node("tool_node", tool_node)
+    
+    # Add conditional edges
+    for member in members:
+        member_node = member + "_node"
+        
+        # Create conditional map
+        conditional_map = {k + "_node": k + "_node" for k in members if k != member}
+        # conditional_map = {k + "_node": k + "_node" for k in members}
+        conditional_map["__end__"] = END
+        conditional_map["tool_node"] = "tool_node"
+
+        
+        if member_node in globals():
+            graph.add_conditional_edges(member_node, router, conditional_map)
+        else:
+            raise ValueError(f"{member_node} not found in globals")
+    
+    conditional_map = {k + "_node": k + "_node" for k in members}   
+    graph.add_conditional_edges("tool_node", lambda x: x["sender"], conditional_map)
     
     
-    #graph.set_entry_point("supervisor_node")
+    # start with first member in the list
+    graph.add_edge(START, members[0] + "_node")
+    
 
-
-    # memory = AsyncSqliteSaver.from_conn_string(":memory:")
-    # graph = graph.compile(checkpointer=memory)
     
     memory = MemorySaver()
     return graph.compile(checkpointer=memory)
-    # return graph.compile(checkpointer=memory, interrupt_before=["human_feedback"])
-    
-    # return graph.compile()

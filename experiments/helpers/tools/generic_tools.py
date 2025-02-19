@@ -22,3 +22,10 @@ def get_current_datetime(timezone_str: str) -> datetime:
     tz = pytz.timezone(timezone_str) 
     now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     return now
+
+@tool
+def do_nothing() -> None:
+    """
+    Not allowed use this tool. You are forbidden to call this tool.
+    """
+    pass

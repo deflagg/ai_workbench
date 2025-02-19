@@ -31,8 +31,8 @@ def main():
         try:
             initial_state: AgentState = {
                 "messages": [HumanMessage(content=user_input)],
-                "next": str,
-                "sender": str,
+                "next": "",     # next agent to speak (will be determined by the graph)
+                "sender": "",   # the agent who just spoke
             }
             
             for step in graph.stream(initial_state):
@@ -40,11 +40,13 @@ def main():
                 state = step[node_name]
 
                 last_message = state["messages"][-1]
+                # If you want to see the raw JSON structure from the AI agent, you can do something like:
                 # json_data = json.loads(last_message.content)
                 # pretty_json = json.dumps(json_data, indent=4)
                 # print(f"Node: {node_name}")
                 # print(f"Message: {pretty_json}")
 
+                # Or just use the built-in pretty_print():
                 last_message.pretty_print()
 
             print("Completed!")

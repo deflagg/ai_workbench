@@ -2,162 +2,138 @@ import sys
 import json
 import operator
 import functools
-import planner_prompts as prompts
-from typing_extensions import TypedDict, Annotated, List, Literal, Union, Optional, Dict, Any
-#from pydantic import BaseModel, Field
+from typing_extensions import TypedDict, Annotated, Union, Literal, Optional
 from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.utils.function_calling import (
-    convert_to_openai_function,
-)
+from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode
-#from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
-# from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-# Import utility functions
-from experiments.helpers.debugging_helpers import display_langgraph_graph
-from experiments.helpers.tools.audio_tools import tts_whisper
-from experiments.helpers.tools.code_automation import python_repl
-# from experiments.helpers.tools.davinci_tools import create_resolve_project, add_audio_track
-from experiments.helpers.tools.generic_tools import get_current_datetime
-
-stop_word = "FINISH"
-# members = ["john", "alice", "mark", "susan"]
-members = ["planner"]
-options = [stop_word] + members
-
+# Example of a "tool" that just returns structured conversation output
 class BasicResponse(BaseModel):
-    """Respond in a conversational manner. Be kind and helpful."""
-    response: str = Field(description="The response of the agent.", example="Hello, how are you?")
-    next_agent: str = Field(description="The agent this response is meant for.", example="david")
+    """
+    Respond in a conversational manner. Be kind and helpful.
+    Provide your next_agent to indicate who should respond next.
+    """
+    response: str = Field(description="The response or idea from this agent.")
+    next_agent: str = Field(
+        description="The next agent who should receive control. If no further collaboration is needed, use FINISH."
+    )
 
-class Task(BaseModel):
-    """ Task in the plan."""
-    description: Optional[str] = Field(default=None, description="Description of the task to be completed.")
-    role: Optional[str] = Field(default=None, description="Agent responsible for this task.")
-    
-    
+# --- Business Requirements (for reference in system prompts) ---
+BUSINESS_REQUIREMENTS = (
+    "The business must not be government or military related, must be scalable, "
+    "automated, fully agentic, and profitable."
+)
+
+# If an agent sets next_agent to this stop_word, the chain ends.
+stop_word = "FINISH"
+
+# The five agents
+members = [
+    "expert_entrepreneur",
+    "expert_computer_scientist_and_software_engineer",
+    "expert_researcher",
+    "ceo_with_mba",
+    "expert_system_designer",
+]
+
+# We provide a helper to create a "collaboration agent" prompt with the ability to pass control
+def create_collab_agent(llm, system_message: str, tools, other_members):
+    """
+    Create an agent with awareness of other members it can pass control to.
+    It can also produce a response in the shape of BasicResponse to indicate
+    the next agent or FINISH if no further collaboration is needed.
+    """
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an AI agent. Your role: {system_message}\n\n"
+                "Business Requirements:\n"
+                f"{BUSINESS_REQUIREMENTS}\n"
+                "You can pass the conversation control to these collaborators: {members}\n\n"
+                "{tool_prompt}"
+            ),
+            MessagesPlaceholder(variable_name="messages"),
+            (
+                "system",
+                "If you need another collaborator's expertise, set `next_agent` to them. "
+                "If no further input is needed, set `next_agent` to FINISH."
+            ),
+        ]
+    )
+    prompt = prompt.partial(system_message=system_message)
+    prompt = prompt.partial(members=", ".join(other_members))
+
+    # Show which tools are available to each agent
+    if tools:
+        tools_prompt = "You have access to the following tools: " + ", ".join(
+            getattr(tool, "name", tool.__name__) if isinstance(tool, type)
+            else getattr(tool, "name", tool.__class__.__name__)
+            for tool in tools
+        )
+    else:
+        tools_prompt = "No special tools are available."
+    prompt = prompt.partial(tool_prompt=tools_prompt)
+
+    # Bind the LLM with the tools for function calling
+    if tools:
+        return prompt | llm.bind_tools(tools, strict=True)
+    return prompt | llm
+
+
+# The "state" your graph will pass around
 class AgentState(TypedDict):
-    messages: Annotated[Union[BaseMessage], operator.add]
-    next: str
-    sender: str
+    messages: Annotated[Union[BaseMessage], operator.add]  # conversation so far
+    next: str   # the agent set to speak next
+    sender: str # the agent who just spoke
 
-def create_agent(llm, system_message: str, tools):
-    """Create a generic agent."""
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "{system_message} "
-                "{tool_prompt} "
-                ,
-            ),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
-    prompt = prompt.partial(system_message=system_message)
-    
-    tools_prompt = "You have access to the following tools: "
 
-    # Get the names of the tools/function and the name of the response types/Class
-    tools_prompt = tools_prompt + ", ".join([
-    getattr(tool, 'name', tool.__name__) if isinstance(tool, type) else getattr(tool, 'name', tool.__class__.__name__)
-    for tool in tools])
-    
-    prompt = prompt.partial(tool_prompt=tools_prompt)
-    
-    if tools:
-        return prompt | llm.bind_tools(tools, strict=True)
-    
-    return prompt | llm
+# We’ll use an OpenAI-like LLM stub for demonstration. 
+# Customize model/temperature as needed.
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
 
-def create_collab_agent(llm, system_message: str, tools, members):
-    """Create an agent."""
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "You are an AI agent, collaborating with other agents: {members} "
-                "\n{system_message} "
-                "{tool_prompt} "
-                ,
-            ),
-            MessagesPlaceholder(variable_name="messages"),
-            (
-                "system",
-                "If you are unable to complete the objective, another agent with different resources can help you. "
-                "If further action is required to achieve the objective, set the next agent to the appropriate agent: {members} "
-                "If you are not the planner and no further action is needed to achieve the objective, set the next agent to planner. "
-                "If you are the planner and no further action is needed to achieve the objective, deliver the deliverables to the end user and set the next agent to {stop_word}. "
-                ,
-            )
-        ]
-    )
-    prompt = prompt.partial(system_message=system_message)
-    prompt = prompt.partial(stop_word=stop_word)
-    prompt = prompt.partial(options=str(options), members=", ".join([member for member in members]))
-    
-    tools_prompt = "Use the provided tools to progress towards completing the task, " \
-                   "if the tools will help with the task. You have access to the following tools: "
-
-    # Get the names of the tools/function and the name of the response types/Class
-    tools_prompt = tools_prompt + ", ".join([
-    getattr(tool, 'name', tool.__name__) if isinstance(tool, type) else getattr(tool, 'name', tool.__class__.__name__)
-    for tool in tools])
-    
-    prompt = prompt.partial(tool_prompt=tools_prompt)
-    
-    if tools:
-        return prompt | llm.bind_tools(tools, strict=True)
-    
-    return prompt | llm
-   
-
-# Initialize the LLM model
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-# llm = ChatOpenAI(model="gpt-4o", temperature=0)
-# llm = llm.bind_tools([AIAgentMessage1], strict=True)
-# llm = llm.with_structured_output(AIAgentMessage, method="json_schema", strict=False)
-# test = llm.invoke("what is the color of an a white rabbit?")
-# test = llm.invoke("what time is it? You have access to the following tools: get_current_datetime.")
-
-# Define the tools
-tools = [BasicResponse, get_current_datetime]
+# Here is our single "tool" example. You can add more as needed.
+tools = [BasicResponse]
 tool_node = ToolNode(tools)
 
+
 def agent_node(state: AgentState, agent, name) -> AgentState:
-    """Create a node for a given agent."""
+    """
+    Generic node logic for a single agent that calls the LLM chain.
+    If the LLM uses BasicResponse (the 'tool'), we parse the JSON and set next accordingly.
+    """
     try:
+        # Invoke the chain with the current conversation
+        result = agent.invoke(state)
 
-
-        result = agent.invoke(state)    
+        # If the chain used the BasicResponse tool:
+        if isinstance(result, AIMessage) and len(result.tool_calls) > 0:
+            tool_call = result.tool_calls[0]
+            if tool_call["name"] == "BasicResponse":
+                structured_response = tool_call["args"]
+                # Attach the agent's name so we know who spoke
+                structured_response["agent_name"] = name
+                return {
+                    "messages": [AIMessage(content=str(structured_response), agent_name=name)],
+                    "next": structured_response.get("next_agent", None),
+                    "sender": name,
+                }
         
-        structured_response = result.tool_calls[0]["args"]
-        structured_response["agent_name"] = name
-        
-        if  (isinstance(result, AIMessage) and 
-            len(result.tool_calls) > 0 and 
-            result.tool_calls[0]["name"] in ["BasicResponse"]):
+        # If no tool calls, treat it as a direct AIMessage
+        if isinstance(result, AIMessage):
             return {
-                        "messages": [AIMessage(content=str(structured_response), agent_name=name)],
-                        "next": structured_response.get("next_agent", None),
-                        "sender": name,
-                    }
-        elif isinstance(result, AIMessage):
-            return {
-                        "messages": [AIMessage(**result.dict(exclude={"type", "name"}), agent_name=name)],
-                        "next": getattr(result, 'next', None),
-                        "sender": name,
-                    }
-        else:
-            raise ValueError(f"Unexpected result type: {type(result)}")
+                "messages": [AIMessage(**result.dict(exclude={"type", "name"}), agent_name=name)],
+                "next": getattr(result, "next", None),
+                "sender": name,
+            }
         
-            
+        raise ValueError(f"Unexpected result type: {type(result)}")
     except Exception as e:
-        # On error, add error to list of messages, and set the next agent to the same one to retry
+        # If there's an error, append that to messages, try the same agent again
         return {
             "messages": [AIMessage(content=f"Error occurred: {e}", agent_name=name)],
             "next": name,
@@ -165,145 +141,167 @@ def agent_node(state: AgentState, agent, name) -> AgentState:
         }
 
 
-
-# Define agent nodes
-planner_node = functools.partial(
+# ---- Define each specialized agent node ----
+expert_entrepreneur_node = functools.partial(
     agent_node,
-    agent = create_collab_agent(
-        llm,
-        system_message="""You are the planner. 
-        You are responsible for planning and coordinating the project. 
-        Here's an example:
-
-        Example Plan:
-
-        If you follow these instructions, do you return to the starting point? Always face forward. Take 1 step backward. Take 9 steps left. Take 2 steps backward. Take 6 steps forward. Take 4 steps forward. Take 4 steps backward. Take 3 steps right.
-
-        Example reasoning structure / format should be a list of tasks and the agent members responsible for each task.
-        
-        You will assign tasks to other agents and ensure the project is completed on time.""",
-        tools=[BasicResponse], 
-        members=[member for member in members if member != "planner"]
+    agent=create_collab_agent(
+        llm=llm,
+        system_message=(
+            "You are an Expert Entrepreneur with deep knowledge of "
+            "starting and scaling businesses, focusing on profitable models. "
+            "Brainstorm under the given constraints."
+        ),
+        tools=tools,
+        other_members=[m for m in members if m != "expert_entrepreneur"]
     ),
-    name = "planner_node"
+    name="expert_entrepreneur_node"
+)
+
+expert_computer_scientist_and_software_engineer_node = functools.partial(
+    agent_node,
+    agent=create_collab_agent(
+        llm=llm,
+        system_message=(
+            "You are an Expert Computer Scientist & Software Engineer. "
+            "Focus on technical feasibility, software architecture, and "
+            "automation aspects."
+        ),
+        tools=tools,
+        other_members=[m for m in members if m != "expert_computer_scientist_and_software_engineer"]
+    ),
+    name="expert_computer_scientist_and_software_engineer_node"
+)
+
+expert_researcher_node = functools.partial(
+    agent_node,
+    agent=create_collab_agent(
+        llm=llm,
+        system_message=(
+            "You are an Expert Researcher adept at market analysis, "
+            "data gathering, and identifying gaps/opportunities."
+        ),
+        tools=tools,
+        other_members=[m for m in members if m != "expert_researcher"]
+    ),
+    name="expert_researcher_node"
+)
+
+ceo_with_mba_node = functools.partial(
+    agent_node,
+    agent=create_collab_agent(
+        llm=llm,
+        system_message=(
+            "You are a CEO with an MBA, skilled at strategic planning, "
+            "financial modeling, and scaling organizations."
+        ),
+        tools=tools,
+        other_members=[m for m in members if m != "ceo_with_mba"]
+    ),
+    name="ceo_with_mba_node"
+)
+
+expert_system_designer_node = functools.partial(
+    agent_node,
+    agent=create_collab_agent(
+        llm=llm,
+        system_message=(
+            "You are an Expert System Designer with experience in designing "
+            "large-scale, robust, and efficient automated systems."
+        ),
+        tools=tools,
+        other_members=[m for m in members if m != "expert_system_designer"]
+    ),
+    name="expert_system_designer_node"
 )
 
 
-john_node = functools.partial(
-    agent_node,
-    agent = create_collab_agent(
-        llm,
-        system_message="You are John. You can't help with planning.",
-        tools=[BasicResponse, get_current_datetime],
-        members=[member for member in members if member != "john"]
-    ),
-    name = "john_node"
-)
-
-alice_node = functools.partial(
-    agent_node,
-    agent = create_collab_agent(
-        llm,
-        system_message="You a are a woman named Alice.",
-        tools=[get_current_datetime],
-        members=[member for member in members if member != "alice"]
-    ),
-    name = "alice_node"
-)
-
-mark_node = functools.partial(
-    agent_node,
-    agent = create_collab_agent(
-        llm,
-        system_message="You are a non-binary named Mark.",
-        tools=[get_current_datetime],
-        members=[member for member in members if member != "mark_node"]
-    ),
-    name = "mark_node"
-)
-
-susan_node = functools.partial(
-    agent_node,
-    agent = create_collab_agent(
-        llm,
-        system_message="You are a code tester. You write test scripts and execute them to ensure the code works as expected. Ensure to include the script to be tested.",
-        tools=[get_current_datetime],
-        members=[member for member in members if member != "susan_node"]
-    ),
-    name = "susan_node"
-)
-
-
-# Define the edge logic
-def router(state) -> Literal["__end__", "planner_node", "john_node", "alice_node", "mark_node", "susan_node", "tool_node"]:
-    """Router function to determine next steps."""
+# ---- Decide who speaks next by analyzing the 'next' field in state ----
+def router(state: AgentState) -> Literal[
+    "__end__",
+    "expert_entrepreneur_node",
+    "expert_computer_scientist_and_software_engineer_node",
+    "expert_researcher_node",
+    "ceo_with_mba_node",
+    "expert_system_designer_node",
+    "tool_node"
+]:
+    """
+    If an AIMessage calls a tool, we route to 'tool_node'.
+    Else we check 'next' in the state. If it's FINISH, we end.
+    Otherwise, route to the appropriate agent node.
+    """
     try:
-        messages = state["messages"]
-        last_message = messages[-1]
-        
+        last_message = state["messages"][-1]
+
+        # If a tool was called, go handle the tool
         if isinstance(last_message, AIMessage) and last_message.tool_calls:
             return "tool_node"
-        if state["next"] == stop_word:
+
+        # Next agent logic
+        nxt = state["next"]
+        if nxt == stop_word:
             return "__end__"
-        if state["next"] == "john":
-            return "john_node"
-        if state["next"] == "alice":
-             return "alice_node"
-        if state["next"] == "mark":
-             return "mark_node"
-        if state["next"] == "susan":
-             return "susan_node"
-        if state["next"] == "planner":
-             return "planner_node"
-        return "__end__"
-    
+        elif nxt == "expert_entrepreneur":
+            return "expert_entrepreneur_node"
+        elif nxt == "expert_computer_scientist_and_software_engineer":
+            return "expert_computer_scientist_and_software_engineer_node"
+        elif nxt == "expert_researcher":
+            return "expert_researcher_node"
+        elif nxt == "ceo_with_mba":
+            return "ceo_with_mba_node"
+        elif nxt == "expert_system_designer":
+            return "expert_system_designer_node"
+        else:
+            # If unrecognized, or empty, just end
+            return "__end__"
     except KeyError as e:
-        print(f"Error in router function: {e}")
+        print(f"Router error: {e}")
         return "__end__"
-    
-        
+
+
 def create_graph() -> StateGraph:
+    """
+    Build and compile the StateGraph for these five agents and the tool node.
+    """
     graph = StateGraph(AgentState)
 
-     # Add nodes to the graph
-    for member in members:
-        node_name = member + "_node"
-        if node_name in globals():
-            graph.add_node(node_name, globals()[node_name])
-        else:
-            raise ValueError(f"{node_name} not found in globals")
-    
+    # ---- Register agent nodes ----
+    graph.add_node("expert_entrepreneur_node", expert_entrepreneur_node)
+    graph.add_node("expert_computer_scientist_and_software_engineer_node", expert_computer_scientist_and_software_engineer_node)
+    graph.add_node("expert_researcher_node", expert_researcher_node)
+    graph.add_node("ceo_with_mba_node", ceo_with_mba_node)
+    graph.add_node("expert_system_designer_node", expert_system_designer_node)
+
+    # Tool node (no chain of tool -> tool)
     graph.add_node("tool_node", tool_node)
-    
-    # Add conditional edges
-    for member in members:
-        member_node = member + "_node"
-        
-        # Create conditional map
-        # conditional_map = {k + "_node": k + "_node" for k in members if k != member}
-        conditional_map = {k + "_node": k + "_node" for k in members}
-        conditional_map["__end__"] = END
-        conditional_map["tool_node"] = "tool_node"
 
-        
-        if member_node in globals():
-            graph.add_conditional_edges(member_node, router, conditional_map)
-        else:
-            raise ValueError(f"{member_node} not found in globals")
-    
-    conditional_map = {k + "_node": k + "_node" for k in members}   
-    graph.add_conditional_edges("tool_node", lambda x: x["sender"], conditional_map)
-    
-    
-    # start with first member in the list
-    graph.add_edge(START, members[0] + "_node")
-    
-    
-    #graph.set_entry_point("supervisor_node")
+    # ---- Create a common conditional map for each agent -> router -> next node ----
+    conditional_map = {
+        "expert_entrepreneur_node": "expert_entrepreneur_node",
+        "expert_computer_scientist_and_software_engineer_node": "expert_computer_scientist_and_software_engineer_node",
+        "expert_researcher_node": "expert_researcher_node",
+        "ceo_with_mba_node": "ceo_with_mba_node",
+        "expert_system_designer_node": "expert_system_designer_node",
+        "tool_node": "tool_node",
+        "__end__": END,
+    }
 
+    # Each agent’s node uses the router to figure out where to go next
+    graph.add_conditional_edges("expert_entrepreneur_node", router, conditional_map)
+    graph.add_conditional_edges("expert_computer_scientist_and_software_engineer_node", router, conditional_map)
+    graph.add_conditional_edges("expert_researcher_node", router, conditional_map)
+    graph.add_conditional_edges("ceo_with_mba_node", router, conditional_map)
+    graph.add_conditional_edges("expert_system_designer_node", router, conditional_map)
 
-    # memory = AsyncSqliteSaver.from_conn_string(":memory:")
-    # graph = graph.compile(checkpointer=memory)
-    
+    # The tool node always goes back to whoever invoked the tool (i.e., state["sender"] + "_node")
+    # (no direct tool_node -> tool_node transition)
+    def tool_return(state: AgentState) -> str:
+        return state["sender"] + "_node"
 
+    graph.add_conditional_edges("tool_node", tool_return, conditional_map)
+
+    # START the conversation at the first agent you wish. For example:
+    graph.add_edge(START, "expert_entrepreneur_node")
+
+    # Compile the graph so it’s ready to be used
     return graph.compile()
