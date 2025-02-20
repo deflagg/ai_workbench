@@ -1,5 +1,7 @@
-torch==2.4.0
-transformers==4.49.0
-datasets==3.3.1
-wandb==0.19.6
-python-dotenv==1.0.1
+torch>=2.4.0
+transformers>=4.49.0
+datasets>=3.3.1
+wandb>=0.19.6
+python-dotenv>=1.0.1
+
+#runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
