@@ -105,7 +105,7 @@ def collate_fn_wikitext(batch):
 # ------------------------------------------------------------------
 
 class DecoderBlock(nn.Module):
-    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.3):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.1):
         super(DecoderBlock, self).__init__()
         self.ln1 = nn.LayerNorm(d_model)
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
@@ -130,7 +130,7 @@ class DecoderBlock(nn.Module):
 
 class DecoderOnlyLM(nn.Module):
     def __init__(self, vocab_size, d_model=32, nhead=4, num_layers=2, 
-                 dim_feedforward=64, max_seq_length=20, dropout=0.3):
+                 dim_feedforward=64, max_seq_length=20, dropout=0.1):
         super(DecoderOnlyLM, self).__init__()
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=tokenizer.pad_token_id)
         self.pos_embedding = nn.Embedding(max_seq_length, d_model)
@@ -281,9 +281,9 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--lr", type=float, default=5e-5,
+    parser.add_argument("--lr", type=float, default=1e-4,
                         help="Learning rate.")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
     parser.add_argument("--max_seq_length", type=int, default=128,
                         help="Max sequence length for the model.")
@@ -300,9 +300,9 @@ def main():
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=8,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=6,
+    parser.add_argument("--num_layers", type=int, default=4,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=1024,
+    parser.add_argument("--dim_feedforward", type=int, default=2048,
                         help="Dimension of the feedforward network in the decoder blocks.")
     args = parser.parse_args()
 
