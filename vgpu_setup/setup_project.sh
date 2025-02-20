@@ -1,16 +1,12 @@
 #!/bin/bash
 
+git clone https://github.com/deflagg/ai_workbench.git
+git pull
+
 # Set variables
 REPO_URL="https://github.com/deflagg/ai_workbench.git"
 PROJECT_DIR="/"
 
-# Update package list
-echo "Updating package list..."
-apt update
-
-# Install required packages
-echo "Installing Git and Python..."
-apt install -y git python3 python3-pip
 
 # Create project directory if it doesn't exist
 echo "Setting up project directory..."
@@ -29,8 +25,11 @@ else
     git pull
 fi
 
-# Navigate to the repository directory
-cd "$(basename $REPO_URL .git)" || exit 1
+# navigate to the experiments/aaaa directory
+#cd "$(basename $REPO_URL .git)" || exit 1
+cd experiments/aaaa
+
+
 
 # Install dependencies if requirements.txt exists
 if [ -f "requirements.txt" ]; then
@@ -49,3 +48,4 @@ cd experiments/aaaa
 # chmod +x wikitext2.py
 chmod +x wikitext2.py
 
+EOF
