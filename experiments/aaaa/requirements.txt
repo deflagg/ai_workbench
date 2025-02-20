@@ -1,0 +1,5 @@
+torch==latest
+transformers==latest
+datasets==latest
+wandb==latest
+python-dotenv==latest
