@@ -2,7 +2,7 @@
 
 # Set variables
 REPO_URL="https://github.com/deflagg/ai_workbench.git"
-PROJECT_DIR="/ai_workbench"
+PROJECT_DIR="/"
 
 # Update package list
 echo "Updating package list..."
