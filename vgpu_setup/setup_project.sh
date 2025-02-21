@@ -2,6 +2,7 @@
 
 git clone https://github.com/deflagg/ai_workbench.git && cd ai_workbench/experiments/aaaa && python3 -m venv venv && source venv/bin/activate && chmod +x wikitext2.py && pip install -r requirements.txt
 
+git pull && python wikitext2_enhanced.py
 
 git clone https://github.com/deflagg/ai_workbench.git
 cd ai_workbench/experiments/aaaa

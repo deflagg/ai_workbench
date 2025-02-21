@@ -339,11 +339,11 @@ def main():
                         help="W&B entity/username")
     parser.add_argument("--d_model", type=int, default=128,
                         help="Dimension of the token and positional embeddings.")
-    parser.add_argument("--nhead", type=int, default=8,
+    parser.add_argument("--nhead", type=int, default=2,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=4,
+    parser.add_argument("--num_layers", type=int, default=2,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=128,
+    parser.add_argument("--dim_feedforward", type=int, default=2048,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=5e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
