@@ -343,14 +343,14 @@ def main():
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=4,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=256,
+    parser.add_argument("--dim_feedforward", type=int, default=1024,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=3e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
     # Add dropout command-line argument with default of 0.1
-    parser.add_argument("--dropout", type=float, default=0.1,
+    parser.add_argument("--dropout", type=float, default=0.2,
                         help="Dropout rate for model layers (default: 0.1)")
     args = parser.parse_args()
 
