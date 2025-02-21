@@ -327,7 +327,7 @@ def main():
                         help="Max sequence length for the model and dataset.")
     parser.add_argument("--stride", type=int, default=64,
                         help="Stride for the sliding window in dataset creation.")
-    parser.add_argument("--checkpoint_interval", type=int, default=50,
+    parser.add_argument("--checkpoint_interval", type=int, default=10,
                         help="Save a checkpoint every N epochs.")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints",
                         help="Directory to save checkpoints.")
