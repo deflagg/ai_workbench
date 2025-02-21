@@ -12,4 +12,6 @@ pip install -r requirements.txt
 # Add .env file to root of project
 cat > .env
 
+git reset --hard HEAD
 git pull
+

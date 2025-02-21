@@ -124,7 +124,7 @@ def top_k_top_p_filtering(logits, top_k=50, top_p=0.9, filter_value=-float('Inf'
 # ------------------------------------------------------------------
 
 class DecoderBlock(nn.Module):
-    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.5):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.1):
         super(DecoderBlock, self).__init__()
         self.ln1 = nn.LayerNorm(d_model)
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
@@ -149,7 +149,7 @@ class DecoderBlock(nn.Module):
 
 class DecoderOnlyLM(nn.Module):
     def __init__(self, vocab_size, d_model=256, nhead=8, num_layers=2, 
-                 dim_feedforward=1024, max_seq_length=128, dropout=0.5):
+                 dim_feedforward=1024, max_seq_length=128, dropout=0.1):
         super(DecoderOnlyLM, self).__init__()
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=tokenizer.pad_token_id)
         self.pos_embedding = nn.Embedding(max_seq_length, d_model)
@@ -327,7 +327,6 @@ def main():
                         help="Max sequence length for the model and dataset.")
     parser.add_argument("--stride", type=int, default=64,
                         help="Stride for the sliding window in dataset creation.")
-    
     parser.add_argument("--checkpoint_interval", type=int, default=50,
                         help="Save a checkpoint every N epochs.")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints",
@@ -344,12 +343,15 @@ def main():
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=4,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=1024,
+    parser.add_argument("--dim_feedforward", type=int, default=256,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=3e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
+    # Add dropout command-line argument with default of 0.1
+    parser.add_argument("--dropout", type=float, default=0.1,
+                        help="Dropout rate for model layers (default: 0.1)")
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -366,7 +368,8 @@ def main():
             "num_layers": args.num_layers,
             "dim_feedforward": args.dim_feedforward,
             "max_seq_length": args.max_seq_length,
-            "vocab_size": tokenizer.vocab_size
+            "vocab_size": tokenizer.vocab_size,
+            "dropout": args.dropout  # log dropout rate
         }
         wandb.init(
             project=args.wandb_project,
@@ -383,14 +386,15 @@ def main():
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn_wikitext)
         val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn_wikitext)
         
-        # Initialize model with unified max_seq_length
+        # Initialize model with dropout from command-line args
         model = DecoderOnlyLM(
             vocab_size=len(tokenizer),
             d_model=args.d_model,
             nhead=args.nhead,
             num_layers=args.num_layers,
             dim_feedforward=args.dim_feedforward,
-            max_seq_length=args.max_seq_length
+            max_seq_length=args.max_seq_length,
+            dropout=args.dropout
         )
         
         # Resume from checkpoint if provided
@@ -429,7 +433,8 @@ def main():
                 nhead=args.nhead,
                 num_layers=args.num_layers,
                 dim_feedforward=args.dim_feedforward,
-                max_seq_length=args.max_seq_length
+                max_seq_length=args.max_seq_length,
+                dropout=args.dropout
             )
             if os.path.exists(args.model_path):
                 model.load_state_dict(torch.load(args.model_path, map_location=device))
