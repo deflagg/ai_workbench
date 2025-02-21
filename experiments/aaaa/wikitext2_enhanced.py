@@ -344,7 +344,7 @@ def main():
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=4,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=256,
+    parser.add_argument("--dim_feedforward", type=int, default=128,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=3e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
