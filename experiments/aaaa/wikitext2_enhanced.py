@@ -124,7 +124,7 @@ def top_k_top_p_filtering(logits, top_k=50, top_p=0.9, filter_value=-float('Inf'
 # ------------------------------------------------------------------
 
 class DecoderBlock(nn.Module):
-    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.3):
+    def __init__(self, d_model, nhead, dim_feedforward, dropout=0.5):
         super(DecoderBlock, self).__init__()
         self.ln1 = nn.LayerNorm(d_model)
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True)
@@ -149,7 +149,7 @@ class DecoderBlock(nn.Module):
 
 class DecoderOnlyLM(nn.Module):
     def __init__(self, vocab_size, d_model=256, nhead=8, num_layers=2, 
-                 dim_feedforward=1024, max_seq_length=128, dropout=0.3):
+                 dim_feedforward=1024, max_seq_length=128, dropout=0.5):
         super(DecoderOnlyLM, self).__init__()
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=tokenizer.pad_token_id)
         self.pos_embedding = nn.Embedding(max_seq_length, d_model)
