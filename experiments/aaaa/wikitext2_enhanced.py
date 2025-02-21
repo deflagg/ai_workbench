@@ -337,7 +337,7 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
-    parser.add_argument("--d_model", type=int, default=256,
+    parser.add_argument("--d_model", type=int, default=128,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=4,
                         help="Number of attention heads in the decoder blocks.")
