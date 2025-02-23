@@ -214,9 +214,11 @@ def generate_text(model, prompt, max_length=128, temperature=1.0, top_k=50, top_
 
 def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max_lr=1e-3,
                 device=torch.device('cpu'), checkpoint_interval=None, checkpoint_dir=None,
-                inference_prompt="Once upon a time", max_seq_length=128, patience=10):
+                inference_prompt="Once upon a time", max_seq_length=128, patience=10,
+                weight_decay=0.0):
     model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=max_lr/25)  # initial lr based on div_factor (default=25)
+    # Updated optimizer with weight decay
+    optimizer = optim.Adam(model.parameters(), lr=max_lr/25, weight_decay=weight_decay)
     total_steps = len(train_dataloader) * num_epochs
     scheduler = OneCycleLR(optimizer, max_lr=max_lr, total_steps=total_steps, pct_start=0.3, anneal_strategy='cos')
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
@@ -349,9 +351,12 @@ def main():
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
-    # Add dropout command-line argument with default of 0.1
+    # Add dropout command-line argument with default of 0.2
     parser.add_argument("--dropout", type=float, default=0.2,
-                        help="Dropout rate for model layers (default: 0.1)")
+                        help="Dropout rate for model layers (default: 0.2)")
+    # Add weight decay command-line argument (default is set to 1e-2)
+    parser.add_argument("--weight_decay", type=float, default=1e-2,
+                        help="Weight decay for the optimizer (default: 1e-2)")
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -369,7 +374,8 @@ def main():
             "dim_feedforward": args.dim_feedforward,
             "max_seq_length": args.max_seq_length,
             "vocab_size": tokenizer.vocab_size,
-            "dropout": args.dropout  # log dropout rate
+            "dropout": args.dropout,
+            "weight_decay": args.weight_decay
         }
         wandb.init(
             project=args.wandb_project,
@@ -415,7 +421,8 @@ def main():
                         checkpoint_dir=args.checkpoint_dir,
                         inference_prompt=args.prompt,
                         max_seq_length=args.max_seq_length,
-                        patience=args.patience)
+                        patience=args.patience,
+                        weight_decay=args.weight_decay)
         except Exception as e:
             print(f"Training terminated with an exception: {str(e)}")
             wandb.finish()
