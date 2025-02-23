@@ -347,7 +347,7 @@ def main():
                         help="Number of decoder blocks.")
     parser.add_argument("--dim_feedforward", type=int, default=2048,
                         help="Dimension of the feedforward network in the decoder blocks.")
-    parser.add_argument("--max_lr", type=float, default=5e-3,
+    parser.add_argument("--max_lr", type=float, default=1e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
