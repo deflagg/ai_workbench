@@ -348,15 +348,15 @@ def main():
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=2,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=2048,
+    parser.add_argument("--dim_feedforward", type=int, default=1024,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=1e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
-    parser.add_argument("--dropout", type=float, default=0.2,
+    parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate for model layers (default: 0.2)")
-    parser.add_argument("--weight_decay", type=float, default=1e-2,
+    parser.add_argument("--weight_decay", type=float, default=0,
                         help="Weight decay for the optimizer (default: 1e-2)")
     args = parser.parse_args()
 
