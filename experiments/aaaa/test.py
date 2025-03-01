@@ -1,131 +1,97 @@
-import pygame
-import random
+import cv2
+import numpy as np
+import colorsys
 
-# Initialize Pygame
-pygame.init()
+# Video setup
+width, height = 1280, 720
+fps = 30
+frames_per_transition = 30
+n = 6  # Number of words
+layers = 5
+words = ["The", "cat", "sat", "on", "the", "mat"]
+theta = 5 * np.pi / 180  # 5-degree rotation
 
-# Screen settings
-WIDTH = 800
-HEIGHT = 800
-SQUARE_SIZE = WIDTH // 11  # 11x11 grid for Monopoly board
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Monopoly")
+# Rotation matrix for values
+W_v = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-BROWN = (139, 69, 19)
+# Initial embeddings on a circle
+angles = -np.pi / 2 + 2 * np.pi * np.arange(n) / n
+X0 = np.stack([np.cos(angles), np.sin(angles)], axis=1)  # (n, 2)
 
-class Property:
-    def __init__(self, name, price, rent, position, color):
-        self.name = name
-        self.price = price
-        self.rent = rent
-        self.owner = None
-        self.position = position
-        self.color = color
+# Precompute embeddings across layers
+X_history = [X0]
+X_current = X0
+for _ in range(layers):
+    Q = X_current
+    K = X_current
+    V = X_current @ W_v
+    scores = np.exp(Q @ K.T / np.sqrt(2))
+    scores /= scores.sum(axis=1, keepdims=True)
+    X_next = scores @ V
+    X_history.append(X_next)
+    X_current = X_next
 
-class Player:
-    def __init__(self, name, color):
-        self.name = name
-        self.money = 1500
-        self.position = 0
-        self.properties = []
-        self.color = color
+# Color mapping function (blue to red)
+def get_color(weight):
+    hue = (2/3) * (1 - weight)  # Blue (2/3) to red (0)
+    rgb = colorsys.hsv_to_rgb(hue, 1, 1)
+    return (int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255))
 
-class Monopoly:
-    def __init__(self):
-        self.players = [
-            Player("Player 1", RED),
-            Player("Player 2", BLUE)
-        ]
-        self.properties = [
-            Property("Mediterranean Avenue", 60, 2, 1, BROWN),
-            Property("Baltic Avenue", 60, 4, 3, BROWN),
-            # Add more properties with their board positions (0-39)
-        ]
-        self.board_size = 40
-        self.current_player = 0
-        self.font = pygame.font.Font(None, 24)
+# Initialize video
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+video = cv2.VideoWriter('self_attention_latent_space.mp4', fourcc, fps, (width, height))
 
-    def roll_dice(self):
-        return random.randint(1, 6) + random.randint(1, 6)
+# Title screen (2 seconds)
+for _ in range(60):
+    img = np.ones((height, width, 3), dtype=np.uint8) * 255
+    title = "Self-Attention in Latent Space"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_size = cv2.getTextSize(title, font, 2, 3)[0]
+    cv2.putText(img, title, (640 - text_size[0] // 2, 360 + text_size[1] // 2), font, 2, (0, 0, 0), 3)
+    video.write(img)
 
-    def draw_board(self):
-        screen.fill(WHITE)
+# Animation
+for l in range(layers):
+    for f in range(frames_per_transition):
+        alpha = f / frames_per_transition
+        X_f = (1 - alpha) * X_history[l] + alpha * X_history[l + 1]
         
-        # Draw outer squares
-        for i in range(11):
-            pygame.draw.rect(screen, BLACK, (i * SQUARE_SIZE, 0, SQUARE_SIZE, SQUARE_SIZE), 2)
-            pygame.draw.rect(screen, BLACK, (i * SQUARE_SIZE, HEIGHT - SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 2)
-            pygame.draw.rect(screen, BLACK, (0, i * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 2)
-            pygame.draw.rect(screen, BLACK, (WIDTH - SQUARE_SIZE, i * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 2)
-
-        # Draw properties
-        for prop in self.properties:
-            pos = self.position_to_coords(prop.position)
-            pygame.draw.rect(screen, prop.color, 
-                           (pos[0], pos[1], SQUARE_SIZE, SQUARE_SIZE // 4))
-            text = self.font.render(prop.name[:5], True, BLACK)
-            screen.blit(text, (pos[0] + 5, pos[1] + 5))
-
-        # Draw players
-        for player in self.players:
-            pos = self.position_to_coords(player.position)
-            pygame.draw.circle(screen, player.color, 
-                             (pos[0] + SQUARE_SIZE // 2, pos[1] + SQUARE_SIZE // 2), 10)
-
-        # Draw info
-        info = [
-            f"Turn: {self.players[self.current_player].name}",
-            f"Money: ${self.players[self.current_player].money}"
-        ]
-        for i, line in enumerate(info):
-            text = self.font.render(line, True, BLACK)
-            screen.blit(text, (WIDTH // 2 - 50, HEIGHT // 2 + i * 30))
-
-    def position_to_coords(self, position):
-        if position < 10:  # Bottom row
-            return (WIDTH - (position + 1) * SQUARE_SIZE, HEIGHT - SQUARE_SIZE)
-        elif position < 20:  # Left column
-            return (0, HEIGHT - (position - 9) * SQUARE_SIZE)
-        elif position < 30:  # Top row
-            return ((position - 20) * SQUARE_SIZE, 0)
-        else:  # Right column
-            return (WIDTH - SQUARE_SIZE, (position - 30) * SQUARE_SIZE)
-
-    def play_turn(self):
-        player = self.players[self.current_player]
-        roll = self.roll_dice()
+        # Dynamic attention scores
+        Q_f = X_f
+        K_f = X_f
+        scores_f = np.exp(Q_f @ K_f.T / np.sqrt(2))
+        scores_f /= scores_f.sum(axis=1, keepdims=True)
         
-        player.position = (player.position + roll) % self.board_size
-        if player.position < roll:
-            player.money += 200
+        img = np.ones((height, width, 3), dtype=np.uint8) * 255
+        
+        # Draw attention lines
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    weight = scores_f[i, j]
+                    color = get_color(weight)
+                    thickness = max(1, int(5 * weight))
+                    start = (int(640 + X_f[i, 0] * 200), int(360 - X_f[i, 1] * 200))
+                    end = (int(640 + X_f[j, 0] * 200), int(360 - X_f[j, 1] * 200))
+                    cv2.line(img, start, end, color, thickness)
+        
+        # Draw points and labels
+        for i in range(n):
+            pos = (int(640 + X_f[i, 0] * 200), int(360 - X_f[i, 1] * 200))
+            cv2.circle(img, pos, 10, (255, 255, 255), -1)  # White fill
+            cv2.circle(img, pos, 10, (0, 0, 0), 1)        # Black border
+            cv2.putText(img, words[i], (pos[0] + 15, pos[1] + 5), font, 0.7, (0, 0, 0), 2)
+        
+        # Color bar
+        for k in range(100, 1180):
+            weight = (k - 100) / (1180 - 100)
+            color = get_color(weight)
+            cv2.line(img, (k, 650), (k, 680), color, 1)
+        cv2.putText(img, "Low attention", (100, 710), font, 0.7, (0, 0, 0), 1)
+        text_size = cv2.getTextSize("High attention", font, 0.7, 1)[0]
+        cv2.putText(img, "High attention", (1180 - text_size[0], 710), font, 0.7, (0, 0, 0), 1)
+        
+        video.write(img)
 
-        self.current_player = (self.current_player + 1) % len(self.players)
-
-    def run(self):
-        clock = pygame.time.Clock()
-        running = True
-
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        self.play_turn()
-                    elif event.key == pygame.K_q:
-                        running = False
-
-            self.draw_board()
-            pygame.display.flip()
-            clock.tick(60)
-
-        pygame.quit()
-
-if __name__ == "__main__":
-    game = Monopoly()
-    game.run()
+video.release()
+print("Video 'self_attention_latent_space.mp4' has been created.")

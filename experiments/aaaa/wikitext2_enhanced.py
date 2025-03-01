@@ -82,6 +82,7 @@ def collate_fn_wikitext(batch):
     """
     Pads sequences in a batch using the tokenizer's pad token.
     For targets, pads with -100 so that these positions are ignored in loss computation.
+    Returns padded inputs, padded targets, and a padding mask.
     """
     logger.debug(f"Collating a batch of {len(batch)} samples.")
     pad_id = tokenizer.pad_token_id
@@ -94,7 +95,10 @@ def collate_fn_wikitext(batch):
         padded_tgt = torch.cat([tgt, torch.full((pad_length,), -100, dtype=torch.long)])
         padded_inputs.append(padded_inp)
         padded_targets.append(padded_tgt)
-    return torch.stack(padded_inputs), torch.stack(padded_targets)
+    padded_inputs = torch.stack(padded_inputs)
+    padded_targets = torch.stack(padded_targets)
+    padding_mask = (padded_inputs == pad_id)  # True where padding occurs
+    return padded_inputs, padded_targets, padding_mask
 
 # ------------------------------------------------------------------
 # SAMPLING: Top-K and Top-P Filtering Function
@@ -136,10 +140,10 @@ class DecoderBlock(nn.Module):
             nn.Dropout(dropout)
         )
     
-    def forward(self, x, causal_mask=None):
+    def forward(self, x, causal_mask=None, key_padding_mask=None):
         residual = x
         x = self.ln1(x)
-        attn_output, _ = self.self_attn(x, x, x, attn_mask=causal_mask)
+        attn_output, _ = self.self_attn(x, x, x, attn_mask=causal_mask, key_padding_mask=key_padding_mask)
         x = residual + attn_output
         residual = x
         x = self.ln2(x)
@@ -162,14 +166,14 @@ class DecoderOnlyLM(nn.Module):
         self.fc_out = nn.Linear(d_model, vocab_size)
         self.max_seq_length = max_seq_length
 
-    def forward(self, x):
+    def forward(self, x, key_padding_mask=None):
         batch_size, seq_length = x.shape
         positions = torch.arange(seq_length, device=x.device).unsqueeze(0).expand(batch_size, seq_length)
         x = self.token_embedding(x) + self.pos_embedding(positions)
         x = self.dropout(x)
         causal_mask = torch.triu(torch.full((seq_length, seq_length), float('-inf'), device=x.device), diagonal=1)
         for layer in self.layers:
-            x = layer(x, causal_mask=causal_mask)
+            x = layer(x, causal_mask=causal_mask, key_padding_mask=key_padding_mask)
         x = self.ln_f(x)
         logits = self.fc_out(x)
         return logits
@@ -217,7 +221,6 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
                 inference_prompt="Once upon a time", max_seq_length=128, patience=10,
                 weight_decay=0.0):
     model.to(device)
-    # Updated optimizer with weight decay
     optimizer = optim.Adam(model.parameters(), lr=max_lr/25, weight_decay=weight_decay)
     total_steps = len(train_dataloader) * num_epochs
     scheduler = OneCycleLR(optimizer, max_lr=max_lr, total_steps=total_steps, pct_start=0.3, anneal_strategy='cos')
@@ -236,10 +239,10 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
             current_epoch = epoch + 1
             model.train()
             total_loss = 0.0
-            for batch_idx, (inputs, targets) in enumerate(train_dataloader):
-                inputs, targets = inputs.to(device), targets.to(device)
+            for batch_idx, (inputs, targets, padding_mask) in enumerate(train_dataloader):
+                inputs, targets, padding_mask = inputs.to(device), targets.to(device), padding_mask.to(device)
                 optimizer.zero_grad()
-                outputs = model(inputs)
+                outputs = model(inputs, key_padding_mask=padding_mask)
                 loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
                 loss.backward()
                 optimizer.step()
@@ -260,9 +263,9 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
                 model.eval()
                 total_val_loss = 0.0
                 with torch.no_grad():
-                    for inputs, targets in val_dataloader:
-                        inputs, targets = inputs.to(device), targets.to(device)
-                        outputs = model(inputs)
+                    for inputs, targets, padding_mask in val_dataloader:
+                        inputs, targets, padding_mask = inputs.to(device), targets.to(device), padding_mask.to(device)
+                        outputs = model(inputs, key_padding_mask=padding_mask)
                         val_loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
                         total_val_loss += val_loss.item()
                 avg_val_loss = total_val_loss / len(val_dataloader)
@@ -351,10 +354,8 @@ def main():
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=10,
                         help="Early stopping patience based on validation loss.")
-    # Add dropout command-line argument with default of 0.2
     parser.add_argument("--dropout", type=float, default=0.2,
                         help="Dropout rate for model layers (default: 0.2)")
-    # Add weight decay command-line argument (default is set to 1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2,
                         help="Weight decay for the optimizer (default: 1e-2)")
     args = parser.parse_args()
