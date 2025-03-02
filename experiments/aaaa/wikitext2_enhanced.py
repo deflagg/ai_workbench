@@ -354,7 +354,7 @@ def main():
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=4,
                         help="Early stopping patience based on validation loss.")
-    parser.add_argument("--dropout", type=float, default=0.1,
+    parser.add_argument("--dropout", type=float, default=0.2,
                         help="Dropout rate for model layers (default: 0.2)")
     parser.add_argument("--weight_decay", type=float, default=0,
                         help="Weight decay for the optimizer (default: 1e-2)")
