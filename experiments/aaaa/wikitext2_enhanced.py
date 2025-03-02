@@ -326,9 +326,9 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=256,
+    parser.add_argument("--batch_size", type=int, default=32,
                         help="Batch size.")
-    parser.add_argument("--max_seq_length", type=int, default=100,
+    parser.add_argument("--max_seq_length", type=int, default=64,
                         help="Max sequence length for the model and dataset.")
     parser.add_argument("--stride", type=int, default=64,
                         help="Stride for the sliding window in dataset creation.")
@@ -350,7 +350,7 @@ def main():
                         help="Number of decoder blocks.")
     parser.add_argument("--dim_feedforward", type=int, default=512,
                         help="Dimension of the feedforward network in the decoder blocks.")
-    parser.add_argument("--max_lr", type=float, default=1e-3,
+    parser.add_argument("--max_lr", type=float, default=3e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=4,
                         help="Early stopping patience based on validation loss.")
