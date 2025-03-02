@@ -326,9 +326,9 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=256,
                         help="Batch size.")
-    parser.add_argument("--max_seq_length", type=int, default=64,
+    parser.add_argument("--max_seq_length", type=int, default=100,
                         help="Max sequence length for the model and dataset.")
     parser.add_argument("--stride", type=int, default=64,
                         help="Stride for the sliding window in dataset creation.")
