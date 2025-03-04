@@ -326,9 +326,9 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
-    parser.add_argument("--max_seq_length", type=int, default=64,
+    parser.add_argument("--max_seq_length", type=int, default=128,
                         help="Max sequence length for the model and dataset.")
     parser.add_argument("--stride", type=int, default=64,
                         help="Stride for the sliding window in dataset creation.")
@@ -346,7 +346,7 @@ def main():
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=4,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=2,
+    parser.add_argument("--num_layers", type=int, default=3,
                         help="Number of decoder blocks.")
     parser.add_argument("--dim_feedforward", type=int, default=1024,
                         help="Dimension of the feedforward network in the decoder blocks.")
