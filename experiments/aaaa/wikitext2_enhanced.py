@@ -346,7 +346,7 @@ def main():
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=4,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=9,
+    parser.add_argument("--num_layers", type=int, default=2,
                         help="Number of decoder blocks.")
     parser.add_argument("--dim_feedforward", type=int, default=256,
                         help="Dimension of the feedforward network in the decoder blocks.")
@@ -354,7 +354,7 @@ def main():
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=4,
                         help="Early stopping patience based on validation loss.")
-    parser.add_argument("--dropout", type=float, default=0.2,
+    parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate for model layers (default: 0.2)")
     parser.add_argument("--weight_decay", type=float, default=0,
                         help="Weight decay for the optimizer (default: 1e-2)")
