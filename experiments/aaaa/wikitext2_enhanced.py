@@ -37,18 +37,18 @@ if tokenizer.bos_token is None:
     logger.info("Added BOS token to GPT-2 tokenizer.")
 
 # ------------------------------------------------------------------
-# DATA PIPELINE: Using WikiText-2 with a GPT-2 Tokenizer and Sliding Window
+# DATA PIPELINE: Using WikiText-103 with a GPT-2 Tokenizer and Sliding Window
 # ------------------------------------------------------------------
 
 class WikiText2Dataset(Dataset):
     def __init__(self, split="train", max_seq_len=128, stride=64):
         """
-        Loads WikiText-2 (raw) and creates samples using a sliding window approach.
+        Loads WikiText-103 (raw) and creates samples using a sliding window approach.
         Each sample is a sequence of length max_seq_len tokens with a [BOS] token prepended.
         For causal language modeling, the input is tokens[:-1] and the target is tokens[1:].
         """
-        logger.info(f"Loading WikiText-2 dataset for split: {split}")
-        dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split=split)
+        logger.info(f"Loading WikiText-103 dataset for split: {split}")
+        dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split=split)
         # Concatenate all non-empty lines into one long string
         all_text = " ".join([line["text"].strip() for line in dataset if line["text"].strip()])
         # Tokenize the concatenated text without adding special tokens
@@ -317,10 +317,10 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
 # ------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Train or run inference on the Decoder-Only LM using WikiText-2.")
+    parser = argparse.ArgumentParser(description="Train or run inference on the Decoder-Only LM using WikiText-103.")
     parser.add_argument("--mode", type=str, choices=["train", "inference"], default="train",
                         help="Mode: 'train' to train the model, 'inference' to generate text.")
-    parser.add_argument("--model_path", type=str, default="wikitext2_decoder_only_model.pt",
+    parser.add_argument("--model_path", type=str, default="wikitext103_decoder_only_model.pt",
                         help="Path to save/load the model.")
     parser.add_argument("--prompt", type=str, default="Once upon a time",
                         help="Prompt for text generation.")
@@ -338,7 +338,7 @@ def main():
                         help="Directory to save checkpoints.")
     parser.add_argument("--resume_checkpoint", type=str, default=None,
                         help="Path to a checkpoint to resume training from.")
-    parser.add_argument("--wandb_project", type=str, default="wikitext2-enhanced",
+    parser.add_argument("--wandb_project", type=str, default="wikitext103-enhanced",
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
@@ -385,7 +385,7 @@ def main():
             name=f"run_{wandb.util.generate_id()}"
         )
 
-        # Use WikiText-2 for training and validation with sliding window
+        # Use WikiText-103 for training and validation with sliding window
         train_dataset = WikiText2Dataset(split="train", max_seq_len=args.max_seq_length, stride=args.stride)
         val_dataset = WikiText2Dataset(split="validation", max_seq_len=args.max_seq_length, stride=args.stride)
         logger.info(f"Training dataset contains {len(train_dataset)} samples.")
