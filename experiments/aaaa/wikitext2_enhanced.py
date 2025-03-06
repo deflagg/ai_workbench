@@ -346,7 +346,7 @@ def main():
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=4,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=3,
+    parser.add_argument("--num_layers", type=int, default=4,
                         help="Number of decoder blocks.")
     parser.add_argument("--dim_feedforward", type=int, default=1024,
                         help="Dimension of the feedforward network in the decoder blocks.")
