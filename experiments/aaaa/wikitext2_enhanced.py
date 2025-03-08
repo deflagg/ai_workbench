@@ -326,7 +326,7 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=128,
+    parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size.")
     parser.add_argument("--max_seq_length", type=int, default=128,
                         help="Max sequence length for the model and dataset.")
@@ -342,7 +342,7 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
-    parser.add_argument("--d_model", type=int, default=128,
+    parser.add_argument("--d_model", type=int, default=64,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=8,
                         help="Number of attention heads in the decoder blocks.")
@@ -354,9 +354,9 @@ def main():
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=4,
                         help="Early stopping patience based on validation loss.")
-    parser.add_argument("--dropout", type=float, default=0.0,
+    parser.add_argument("--dropout", type=float, default=0.1,
                         help="Dropout rate for model layers (default: 0.2)")
-    parser.add_argument("--weight_decay", type=float, default=0,
+    parser.add_argument("--weight_decay", type=float, default=0.0,
                         help="Weight decay for the optimizer (default: 1e-2)")
     args = parser.parse_args()
 
