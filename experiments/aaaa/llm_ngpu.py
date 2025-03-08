@@ -323,7 +323,7 @@ def main():
                         help="Path to save/load the model.")
     parser.add_argument("--prompt", type=str, default="Once upon a time",
                         help="Prompt for text generation.")
-    parser.add_argument("--num_epochs", type=int, default=1000,
+    parser.add_argument("--num_epochs", type=int, default=1,
                         help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
@@ -337,7 +337,7 @@ def main():
                         help="Directory to save checkpoints.")
     parser.add_argument("--resume_checkpoint", type=str, default=None,
                         help="Path to a checkpoint to resume training from.")
-    parser.add_argument("--wandb_project", type=str, default="wikitext103-enhanced",
+    parser.add_argument("--wandb_project", type=str, default="training strategy testing",
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
