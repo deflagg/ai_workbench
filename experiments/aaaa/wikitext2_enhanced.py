@@ -342,19 +342,19 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
-    parser.add_argument("--d_model", type=int, default=64,
+    parser.add_argument("--d_model", type=int, default=256,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=8,
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=24,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=256,
+    parser.add_argument("--dim_feedforward", type=int, default=1024,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=5e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
     parser.add_argument("--patience", type=int, default=4,
                         help="Early stopping patience based on validation loss.")
-    parser.add_argument("--dropout", type=float, default=0.1,
+    parser.add_argument("--dropout", type=float, default=0.2,
                         help="Dropout rate for model layers (default: 0.2)")
     parser.add_argument("--weight_decay", type=float, default=0.0,
                         help="Weight decay for the optimizer (default: 1e-2)")
