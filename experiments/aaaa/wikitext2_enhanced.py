@@ -326,7 +326,7 @@ def main():
                         help="Prompt for text generation.")
     parser.add_argument("--num_epochs", type=int, default=1000,
                         help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=512,
+    parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
     parser.add_argument("--max_seq_length", type=int, default=128,
                         help="Max sequence length for the model and dataset.")
@@ -342,13 +342,13 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
-    parser.add_argument("--d_model", type=int, default=256,
+    parser.add_argument("--d_model", type=int, default=128,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=8,
                         help="Number of attention heads in the decoder blocks.")
-    parser.add_argument("--num_layers", type=int, default=9,
+    parser.add_argument("--num_layers", type=int, default=24,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=1024,
+    parser.add_argument("--dim_feedforward", type=int, default=256,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=5e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")
