@@ -329,7 +329,7 @@ def main():
                         help="Path to save/load the model.")
     parser.add_argument("--prompt", type=str, default="Once upon a time",
                         help="Prompt for text generation.")
-    parser.add_argument("--num_epochs", type=int, default=2,
+    parser.add_argument("--num_epochs", type=int, default=1,
                         help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
@@ -349,13 +349,13 @@ def main():
                         help="W&B entity/username")
     parser.add_argument("--wandb_save_checkpoints", action="store_true",
                         help="If set, checkpoints will also be saved to W&B.")
-    parser.add_argument("--d_model", type=int, default=256,
+    parser.add_argument("--d_model", type=int, default=512,
                         help="Dimension of the token and positional embeddings.")
-    parser.add_argument("--nhead", type=int, default=4,
+    parser.add_argument("--nhead", type=int, default=8,
                         help="Number of attention heads in the decoder blocks.")
     parser.add_argument("--num_layers", type=int, default=12,
                         help="Number of decoder blocks.")
-    parser.add_argument("--dim_feedforward", type=int, default=1024,
+    parser.add_argument("--dim_feedforward", type=int, default=2048,
                         help="Dimension of the feedforward network in the decoder blocks.")
     parser.add_argument("--max_lr", type=float, default=5e-3,
                         help="Maximum learning rate for 1-cycle LR policy.")

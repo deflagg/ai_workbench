@@ -8,6 +8,9 @@ git pull && python llm_ngpu.py
 # Run inference
 python llm_ngpu.py --mode inference --model_path checkpoints/checkpoint_epoch_1.pt
 
+wandb artifact put --name checkpoint_epoch_2 --type model /ai_workbench/experiments/aaaa/checkpoints/checkpoint_epoch_2.pt
+
+
 git clone https://github.com/deflagg/ai_workbench.git
 cd ai_workbench/experiments/aaaa
 python3 -m venv venv
