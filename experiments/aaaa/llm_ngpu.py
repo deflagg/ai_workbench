@@ -219,7 +219,7 @@ def generate_text(model, prompt, max_length=128, temperature=1.0, top_k=50, top_
 def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max_lr=1e-3,
                 device=torch.device('cpu'), checkpoint_interval=None, checkpoint_dir=None,
                 inference_prompt="Once upon a time", max_seq_length=128, patience=10,
-                weight_decay=0.0):
+                weight_decay=0.0, wandb_save_checkpoints=False):
     optimizer = optim.Adam(model.parameters(), lr=max_lr/25, weight_decay=weight_decay)
     total_steps = len(train_dataloader) * num_epochs
     scheduler = OneCycleLR(optimizer, max_lr=max_lr, total_steps=total_steps, pct_start=0.3, anneal_strategy='cos')
@@ -295,6 +295,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
                 wandb.log({
                     "generated_text": wandb.Html(f"<p><strong>Epoch {current_epoch}:</strong> {inference_output}</p>")
                 })
+                if wandb_save_checkpoints:
+                    wandb.save(checkpoint_path)
         return model
 
     except KeyboardInterrupt:
@@ -302,6 +304,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
         checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_interrupt_epoch_{current_epoch}.pt")
         torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), checkpoint_path)
         print(f"\nKeyboardInterrupt detected. Checkpoint saved at {checkpoint_path}")
+        if wandb_save_checkpoints:
+            wandb.save(checkpoint_path)
         sys.exit(0)
 
     except Exception as e:
@@ -309,6 +313,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10, max
         checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_exception_epoch_{current_epoch}.pt")
         torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), checkpoint_path)
         print(f"Exception occurred during training. Checkpoint saved at {checkpoint_path}")
+        if wandb_save_checkpoints:
+            wandb.save(checkpoint_path)
         raise e
 
 # ------------------------------------------------------------------
@@ -341,6 +347,8 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
+    parser.add_argument("--wandb_save_checkpoints", action="store_true",
+                        help="If set, checkpoints will also be saved to W&B.")
     parser.add_argument("--d_model", type=int, default=256,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--nhead", type=int, default=4,
@@ -376,7 +384,8 @@ def main():
             "vocab_size": tokenizer.vocab_size,
             "dropout": args.dropout,
             "weight_decay": args.weight_decay,
-            "num_gpus": torch.cuda.device_count()  # Log number of GPUs
+            "num_gpus": torch.cuda.device_count(),
+            "wandb_save_checkpoints": args.wandb_save_checkpoints
         }
         wandb.init(
             project=args.wandb_project,
@@ -428,7 +437,8 @@ def main():
                         inference_prompt=args.prompt,
                         max_seq_length=args.max_seq_length,
                         patience=args.patience,
-                        weight_decay=args.weight_decay)
+                        weight_decay=args.weight_decay,
+                        wandb_save_checkpoints=args.wandb_save_checkpoints)
         except Exception as e:
             print(f"Training terminated with an exception: {str(e)}")
             wandb.finish()
