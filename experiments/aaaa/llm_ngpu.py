@@ -329,7 +329,7 @@ def main():
                         help="Path to save/load the model.")
     parser.add_argument("--prompt", type=str, default="Once upon a time",
                         help="Prompt for text generation.")
-    parser.add_argument("--num_epochs", type=int, default=1,
+    parser.add_argument("--num_epochs", type=int, default=2,
                         help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=128,
                         help="Batch size.")
