@@ -44,12 +44,6 @@ if tokenizer.bos_token is None:
 # ------------------------------------------------------------------------------
 class WikiTextDataset(Dataset):
     def __init__(self, split="train", max_seq_len=128, stride=64, dataset_name="wikitext-103-raw-v1"):
-        """
-        Loads a specified WikiText dataset (raw) and creates samples using a sliding window approach.
-        Each sample is a sequence with a [BOS] token prepended.
-        For training, the input is tokens[:-1] and the target is the final token (tokens[-1]).
-        The dataset is specified via the full name, e.g., "wikitext-2-raw-v1" or "wikitext-103-raw-v1".
-        """
         logger.info(f"Loading {dataset_name} dataset for split: {split}")
         dataset = load_dataset("wikitext", dataset_name, split=split)
         all_text = " ".join([line["text"].strip() for line in dataset if line["text"].strip()])
@@ -78,10 +72,6 @@ class WikiTextDataset(Dataset):
                 torch.tensor(target_id, dtype=torch.long))
 
 def collate_fn_token_navigator(batch):
-    """
-    Pads variable-length input sequences and returns the actual lengths.
-    Each sample in the batch is a tuple: (input_ids, target_id).
-    """
     inputs, targets = zip(*batch)
     lengths = torch.tensor([len(x) for x in inputs], dtype=torch.long)
     max_len = max(lengths)
@@ -159,7 +149,8 @@ def generate_text(model, prompt, max_length=128, temperature=1.0, device=torch.d
 # ------------------------------------------------------------------------------
 def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10,
                 device=torch.device('cpu'), checkpoint_interval=None, checkpoint_dir=None,
-                inference_prompt="Once upon a time", max_seq_length=128, patience=10):
+                inference_prompt="Once upon a time", max_seq_length=128, patience=10,
+                save_checkpoints_to_wandb=False):
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     
@@ -222,6 +213,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10,
                 wandb.log({
                     "generated_text": wandb.Html(f"<p><strong>Epoch {current_epoch}:</strong> {inference_output}</p>")
                 })
+                if save_checkpoints_to_wandb:
+                    wandb.save(checkpoint_path)
         return model
 
     except KeyboardInterrupt:
@@ -229,7 +222,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10,
         checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_interrupt_epoch_{current_epoch}.pt")
         torch.save(model.state_dict(), checkpoint_path)
         print(f"\nKeyboardInterrupt detected. Checkpoint saved at {checkpoint_path}")
-        wandb.save(checkpoint_path)
+        if save_checkpoints_to_wandb:
+            wandb.save(checkpoint_path)
         sys.exit(0)
 
     except Exception as e:
@@ -237,7 +231,8 @@ def train_model(model, train_dataloader, val_dataloader=None, num_epochs=10,
         checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_exception_epoch_{current_epoch}.pt")
         torch.save(model.state_dict(), checkpoint_path)
         print(f"Exception occurred during training. Checkpoint saved at {checkpoint_path}")
-        wandb.save(checkpoint_path)
+        if save_checkpoints_to_wandb:
+            wandb.save(checkpoint_path)
         raise e
 
 # ------------------------------------------------------------------------------
@@ -329,7 +324,8 @@ def main():
                         checkpoint_dir=args.checkpoint_dir,
                         inference_prompt=args.prompt,
                         max_seq_length=args.max_seq_length,
-                        patience=10)
+                        patience=10,
+                        save_checkpoints_to_wandb=args.wandb_save_checkpoints)
         except Exception as e:
             print(f"Training terminated with an exception: {str(e)}")
             wandb.finish()
