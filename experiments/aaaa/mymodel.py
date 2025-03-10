@@ -246,7 +246,7 @@ def main():
                         help="Path to save/load the model.")
     parser.add_argument("--prompt", type=str, default="Once upon a time",
                         help="Prompt for text generation.")
-    parser.add_argument("--num_epochs", type=int, default=1,
+    parser.add_argument("--num_epochs", type=int, default=5,
                         help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size.")
@@ -264,8 +264,8 @@ def main():
                         help="W&B project name")
     parser.add_argument("--wandb_entity", type=str, default=None,
                         help="W&B entity/username")
-    parser.add_argument("--wandb_save_checkpoints", type=bool, default=False,
-                        help="If set, checkpoints will also be saved to W&B.")
+    parser.add_argument("--wandb_save_checkpoints", action="store_true",
+                    help="If set, checkpoints will also be saved to W&B.")
     parser.add_argument("--d_model", type=int, default=128,
                         help="Dimension of the token and positional embeddings.")
     parser.add_argument("--wikitext_name", type=str, default="wikitext-2-raw-v1",
