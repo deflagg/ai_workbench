@@ -268,7 +268,7 @@ def main():
                     help="If set, checkpoints will also be saved to W&B.")
     parser.add_argument("--d_model", type=int, default=128,
                         help="Dimension of the token and positional embeddings.")
-    parser.add_argument("--wikitext_name", type=str, default="wikitext-2-raw-v1",
+    parser.add_argument("--wikitext_name", type=str, default="wikitext-103-raw-v1",
                         help="Name of the WikiText dataset to use (e.g., 'wikitext-2-raw-v1' or 'wikitext-103-raw-v1').")
     args = parser.parse_args()
 
