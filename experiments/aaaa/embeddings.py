@@ -128,12 +128,14 @@ class EmbeddingOnlyLM(nn.Module):
 # TRAINING FUNCTION
 # ------------------------------------------------------------------
 
-def train_model(model, train_dataloader, num_epochs=10, learning_rate=1e-3, device=torch.device('cpu')):
+def train_model(model, train_dataloader, num_epochs=10, learning_rate=1e-3, device=torch.device('cpu'), val_dataloader=None):
     model.train()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
+    
     for epoch in range(num_epochs):
         total_loss = 0.0
+        # Training loop over batches
         for batch_idx, (inputs, targets, _) in enumerate(train_dataloader):
             inputs = inputs.to(device)
             targets = targets.to(device)
@@ -143,9 +145,41 @@ def train_model(model, train_dataloader, num_epochs=10, learning_rate=1e-3, devi
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        avg_loss = total_loss / len(train_dataloader)
-        print(f"Epoch {epoch+1}/{num_epochs} - Loss: {avg_loss:.4f}")
-        wandb.log({"epoch": epoch+1, "loss": avg_loss})
+            
+            # Log batch loss to wandb
+            wandb.log({
+                "batch_loss": loss.item(),
+                "epoch": epoch + 1,
+                "batch_idx": batch_idx
+            })
+        
+        avg_train_loss = total_loss / len(train_dataloader)
+        # Log training loss for the epoch
+        wandb.log({
+            "training_loss": avg_train_loss,
+            "epoch": epoch + 1
+        })
+        print(f"Epoch {epoch+1}/{num_epochs} - Training Loss: {avg_train_loss:.4f}")
+        
+        # If a validation dataloader is provided, evaluate the model
+        if val_dataloader is not None:
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for inputs, targets, _ in val_dataloader:
+                    inputs = inputs.to(device)
+                    targets = targets.to(device)
+                    outputs = model(inputs)
+                    loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
+                    val_loss += loss.item()
+            avg_val_loss = val_loss / len(val_dataloader)
+            wandb.log({
+                "validation_loss": avg_val_loss,
+                "epoch": epoch + 1
+            })
+            print(f"Epoch {epoch+1}/{num_epochs} - Validation Loss: {avg_val_loss:.4f}")
+            model.train()
+            
     return model
 
 # ------------------------------------------------------------------
@@ -196,10 +230,15 @@ def main():
     print(f"Using device: {device}")
 
     if args.mode == "train":
-        # Prepare dataset and dataloader
+        # Prepare training dataset and dataloader
         train_dataset = WikiText2Dataset(split="train", max_seq_len=args.max_seq_length, stride=args.stride)
         print(f"Training dataset contains {len(train_dataset)} samples.")
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn_wikitext)
+        
+        # Prepare validation dataset and dataloader
+        val_dataset = WikiText2Dataset(split="validation", max_seq_len=args.max_seq_length, stride=args.stride)
+        print(f"Validation dataset contains {len(val_dataset)} samples.")
+        val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn_wikitext)
 
         # Initialize the embedding-only model
         model = EmbeddingOnlyLM(
@@ -211,7 +250,8 @@ def main():
         model.to(device)
 
         print("Starting training...")
-        model = train_model(model, train_dataloader, num_epochs=args.num_epochs, learning_rate=args.learning_rate, device=device)
+        # Pass the validation dataloader to train_model
+        model = train_model(model, train_dataloader, num_epochs=args.num_epochs, learning_rate=args.learning_rate, device=device, val_dataloader=val_dataloader)
 
         # Save the trained model
         torch.save(model.state_dict(), args.model_path)
